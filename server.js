@@ -37,6 +37,8 @@ const requireAdmin = (req, res, next) => {
 };
 const clean = (v, n = 2000) => String(v === undefined || v === null ? '' : v).slice(0, n);
 const isDataUrl = (v) => /^data:image\/(png|jpe?g|gif|webp|svg\+xml);base64,[A-Za-z0-9+/=]+$/i.test(String(v || ''));
+/* administrator scope: ?scope=all lets the admin see & manage every account's interviews */
+const scopeUid = (req) => (req.user.role === 'Administrator' && String(req.query.scope || '') === 'all') ? null : req.user.id;
 const mkUsername = (email) => {
   let base = String(email || '').split('@')[0].toLowerCase().replace(/[^a-z0-9._-]/g, '').slice(0, 24) || 'user';
   let un = base, n = 2;
@@ -127,14 +129,14 @@ app.delete('/api/admin/users/:id', requireAdmin, (req, res) => {
 });
 
 /* ---- dashboard ---- */
-app.get('/api/stats', requireAuth, (req, res) => res.json({ ok: true, ...db.stats(req.user.id) }));
+app.get('/api/stats', requireAuth, (req, res) => res.json({ ok: true, ...db.stats(scopeUid(req)) }));
 app.get('/api/recent', requireAuth, (req, res) => res.json({ ok: true, interviews: db.listInterviews(req.user.id).map(db.withCounts).slice(0, 6) }));
 
 /* ---- interviews CRUD ---- */
 app.get('/api/interviews', requireAuth, (req, res) => {
   const { search = '', status = '' } = req.query;
   const s = search.toLowerCase();
-  const rows = db.listInterviews(req.user.id).map(db.withCounts)
+  const rows = db.listInterviews(scopeUid(req)).map(db.withCounts)
     .filter(i => (!status || i.status === status) && (!s || (i.title + ' ' + i.stakeholders + ' ' + (i.description || '')).toLowerCase().includes(s)));
   res.json({ ok: true, interviews: rows });
 });
@@ -145,9 +147,9 @@ app.post('/api/interviews', requireAuth, (req, res) => {
   res.json({ ok: true, interview: db.createInterview(req.user.id, { title: clean(title, 300).trim(), description: clean(req.body.description, 4000), stakeholders: clean(stakeholders, 1000).trim(), interviewee: clean(req.body.interviewee, 300), date: clean(req.body.date, 20) || new Date().toISOString().slice(0, 10), type: clean(req.body.type, 100) || 'General' }) });
 });
 app.get('/api/interviews/:id', requireAuth, (req, res) => {
-  const iv = db.getInterview(req.user.id, req.params.id);
+  const iv = db.getInterview(scopeUid(req), req.params.id);
   if (!iv) return res.status(404).json({ ok: false, error: 'Interview not found.' });
-  res.json({ ok: true, interview: db.withCounts(iv), suggestion: db.getSuggestion(req.user.id, iv.id) });
+  res.json({ ok: true, interview: db.withCounts(iv), suggestion: db.getSuggestion(scopeUid(req), iv.id) });
 });
 app.put('/api/interviews/:id', requireAuth, (req, res) => {
   const b = req.body || {};
@@ -165,7 +167,7 @@ app.put('/api/interviews/:id', requireAuth, (req, res) => {
   res.json({ ok: true, interview: iv });
 });
 app.delete('/api/interviews/:id', requireAuth, (req, res) => {
-  if (!db.deleteInterview(req.user.id, req.params.id)) return res.status(404).json({ ok: false, error: 'Interview not found.' });
+  if (!db.deleteInterview(scopeUid(req), req.params.id)) return res.status(404).json({ ok: false, error: 'Interview not found.' });
   res.json({ ok: true });
 });
 
@@ -184,7 +186,7 @@ app.post('/api/interviews/:id/generate', requireAuth, async (req, res) => {
   }
 });
 app.get('/api/interviews/:id/questions', requireAuth, (req, res) => {
-  const rows = db.listQuestions(req.user.id, req.params.id);
+  const rows = db.listQuestions(scopeUid(req), req.params.id);
   if (!rows) return res.status(404).json({ ok: false, error: 'Interview not found.' });
   res.json({ ok: true, questions: rows });
 });
@@ -210,12 +212,13 @@ app.post('/api/questions/:qid/answer', requireAuth, (req, res) => {
 /* ---- AI analysis / questions bank / profile / settings ---- */
 app.post('/api/interviews/:id/analyze', requireAuth, async (req, res) => {
   try {
-    const iv = db.getInterview(req.user.id, req.params.id);
+    const uidv = scopeUid(req);
+    const iv = db.getInterview(uidv, req.params.id);
     if (!iv) return res.status(404).json({ ok: false, error: 'Interview not found.' });
-    const qa = db.listQuestions(req.user.id, iv.id);
+    const qa = db.listQuestions(uidv, iv.id);
     if (!qa || !qa.length) return res.status(400).json({ ok: false, error: 'Generate questions and collect answers first.' });
     const out = await ai.analyzeInterview(db.withCounts(iv), qa);
-    const saved = db.saveSuggestion(req.user.id, iv.id, out.analysis, out.source);
+    const saved = db.saveSuggestion(uidv, iv.id, out.analysis, out.source);
     res.json({ ok: true, suggestion: saved, source: out.source });
   } catch (e) {
     if (e && e.code === 'NO_ANSWERS') return res.status(400).json({ ok: false, error: 'No answers yet — save at least one answer before generating suggestions.' });
@@ -223,7 +226,7 @@ app.post('/api/interviews/:id/analyze', requireAuth, async (req, res) => {
   }
 });
 app.get('/api/interviews/:id/suggestion', requireAuth, (req, res) => {
-  const s = db.getSuggestion(req.user.id, req.params.id);
+  const s = db.getSuggestion(scopeUid(req), req.params.id);
   if (s === undefined) return res.status(404).json({ ok: false, error: 'Interview not found.' });
   res.json({ ok: true, suggestion: s });
 });

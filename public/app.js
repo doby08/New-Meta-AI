@@ -46,7 +46,58 @@ function confirmDlg(title, text, okLabel, onOk) {
 }
 const badge = (s) => '<span class="badge b-' + esc(s) + '">' + esc(s) + '</span>';
 const skel = (n) => Array.from({ length: n || 3 }, () => '<div class="skel" style="margin-bottom:12px"></div>').join('');
-/* downscale an uploaded image to a small JPEG data URL (avatar / logo) */
+/* crop modal: drag to position + zoom, then export a square JPEG data URL */
+function openCropper(file, onDone) {
+  if (!file || !onDone) return;
+  const url = URL.createObjectURL(file);
+  const img = document.createElement('img');
+  img.onload = () => {
+    const V = 260;
+    const natW = img.naturalWidth || img.width, natH = img.naturalHeight || img.height;
+    const base = Math.max(V / natW, V / natH); // cover the viewport at zoom = 1
+    let s = 1, tx = 0, ty = 0;
+    const clamp = () => {
+      const dw = natW * base * s, dh = natH * base * s;
+      tx = Math.min(0, Math.max(V - dw, tx));
+      ty = Math.min(0, Math.max(V - dh, ty));
+    };
+    tx = (V - natW * base) / 2; ty = (V - natH * base) / 2;
+    const render = () => {
+      const el = $('#cropImg'); if (!el) return;
+      el.style.width = (natW * base * s) + 'px';
+      el.style.height = (natH * base * s) + 'px';
+      el.style.transform = 'translate(' + tx + 'px,' + ty + 'px)';
+    };
+    modal('<h3>Crop your picture</h3><p class="sub">Drag the image to position it, zoom if needed — it becomes a neat square.</p>'
+      + '<div class="crop-view" id="cropView"><img id="cropImg" src="' + esc(url) + '" alt="crop" draggable="false"></div>'
+      + '<label class="field" style="margin-top:12px"><span>Zoom</span><input id="cropZoom" type="range" min="1" max="3" step="0.01" value="1"></label>'
+      + '<div class="modal-actions"><button class="btn btn-ghost" id="cropCancel">Cancel</button><button class="btn btn-primary" id="cropApply">Use this picture</button></div>', true);
+    render();
+    const cleanup = () => URL.revokeObjectURL(url);
+    $('#cropZoom').oninput = (e) => { s = parseFloat(e.target.value) || 1; clamp(); render(); };
+    const view = $('#cropView');
+    let drag = null;
+    view.addEventListener('pointerdown', (ev) => { drag = { x: ev.clientX, y: ev.clientY, tx, ty }; try { view.setPointerCapture(ev.pointerId); } catch {} });
+    view.addEventListener('pointermove', (ev) => { if (!drag) return; tx = drag.tx + (ev.clientX - drag.x); ty = drag.ty + (ev.clientY - drag.y); clamp(); render(); });
+    view.addEventListener('pointerup', () => { drag = null; });
+    view.addEventListener('pointercancel', () => { drag = null; });
+    $('#cropCancel').onclick = () => { cleanup(); closeModal(); onDone(''); };
+    $('#cropApply').onclick = () => {
+      try {
+        const sc = base * s;
+        const sx = -tx / sc, sy = -ty / sc, sw = V / sc, sh = V / sc;
+        const c = document.createElement('canvas');
+        c.width = 256; c.height = 256;
+        const ctx = c.getContext('2d');
+        ctx.drawImage(img, sx, sy, sw, sh, 0, 0, 256, 256);
+        const out = c.toDataURL('image/jpeg', 0.85);
+        cleanup(); closeModal(); onDone(out);
+      } catch (err) { cleanup(); closeModal(); onDone(''); }
+    };
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); onDone(''); };
+  img.src = url;
+}
 function fileToDataUrl(file, maxDim, cb) {
   if (!file || !cb) return;
   const url = URL.createObjectURL(file);
@@ -70,6 +121,7 @@ function fileToDataUrl(file, maxDim, cb) {
 /* ---------- auth & shell ---------- */
 function showLogin() {
   S.user = null;
+  applyTheme('light'); // login stays light; night mode is chosen per account after sign-in
   $('#appShell').classList.add('hidden');
   $('#loginScreen').classList.remove('hidden');
   $('#loginError').classList.add('hidden');
@@ -87,6 +139,7 @@ function showApp() {
   if (S.user.avatar) av.innerHTML = '<img src="' + esc(S.user.avatar) + '" alt="avatar">';
   else av.innerHTML = esc((S.user.displayName || S.user.username || 'U').slice(0, 1).toUpperCase());
   $('#aiBadge').textContent = S.aiMode === 'openai' ? '✨ AI: ' + (S.aiModel || 'OpenAI') : '🧠 AI: Built-in Smart';
+  applyTheme(S.settings.theme || localStorage.getItem('aais-theme') || 'light');
   renderNav();
 }
 function renderNav() {
@@ -138,7 +191,7 @@ function askLogout() {
 }
 
 async function boot() {
-  try { applyTheme(localStorage.getItem('aais-theme') || 'light'); } catch { applyTheme('light'); }
+  applyTheme('light'); // sign-in screen is always light — each account picks night/light after logging in
   $('#pwToggle').onclick = () => { const p = $('#loginPass'); p.type = p.type === 'password' ? 'text' : 'password'; $('#pwToggle').textContent = p.type === 'password' ? '👁' : '🙈'; };
   $('#menuBtn').onclick = () => document.body.classList.toggle('nav-open');
   $('#sideScrim').onclick = () => document.body.classList.remove('nav-open');
@@ -403,8 +456,9 @@ function drawQA() {
     + '<div class="qa-nav"><button class="btn btn-ghost" id="qPrev"' + (idx === 0 ? ' disabled' : '') + '>← Previous</button>'
     + '<button class="btn btn-primary" id="qSave">Save answer</button>'
     + '<button class="btn btn-ghost" id="qNext"' + (idx === list.length - 1 ? ' disabled' : '') + '>Next →</button></div>'
-    + '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn btn-ghost btn-sm" id="qMore">⚡ Generate more</button>'
-    + '<button class="btn btn-ghost btn-sm" id="qJump">Jump to…</button></div></div>';
+    + '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center"><button class="btn btn-ghost btn-sm" id="qMore">⚡ Generate more</button>'
+    + '<button class="btn btn-ghost btn-sm" id="qJump">Jump to…</button>'
+    + '<button class="btn btn-primary btn-sm" id="qFinish" style="margin-left:auto" title="Save everything and get the AI recommended solutions">🏁 Finish Interview</button></div></div>';
   $('#qBack').onclick = () => { S.qa.dirty = false; pMy(); };
   $('#qEdit').onclick = () => editInterview(S.qa.id, () => pAnswer(S.qa.id));
   $('#qResults').onclick = () => go('results', S.qa.id);
@@ -417,12 +471,7 @@ function drawQA() {
       const r = await api('/api/questions/' + q.id + '/answer', { method: 'POST', body: JSON.stringify({ answer: $('#qAns').value }) });
       q.answer = r.question.answer; S.qa.dirty = false; S.qa.interview = r.interview;
       toast('Answers saved successfully.');
-      if (r.interview.status === 'completed') {
-        toast('🎉 Interview completed — analyzing answers for insights…');
-        try { await api('/api/interviews/' + S.qa.id + '/analyze', { method: 'POST' }); } catch (err) { /* insights remain optional if AI is busy */ }
-        go('results', S.qa.id);
-        return;
-      }
+      if (r.interview.status === 'completed') toast('🎉 All questions answered — click 🏁 Finish Interview to get the AI solutions.');
       if (S.qa.idx < S.qa.list.length - 1) { S.qa.idx++; }
       drawQA();
     } catch (err) { btnLoading(btn, false); toast(err.message, 'error'); }
@@ -436,6 +485,22 @@ function drawQA() {
     modal('<h3>Jump to question</h3><p>' + S.qa.list.length + ' questions in this interview.</p><div style="display:flex;gap:6px;flex-wrap:wrap;max-height:240px;overflow:auto">' + S.qa.list.map((x, i) => '<button class="btn btn-sm ' + (x.answer && x.answer.trim() ? 'btn-primary' : 'btn-ghost') + '" data-j="' + i + '">' + (i + 1) + '</button>').join('') + '</div><div class="modal-actions"><button class="btn btn-ghost" id="mCancel">Close</button></div>');
     $('#mCancel').onclick = closeModal;
     $$('#modalRoot [data-j]').forEach(b => b.onclick = () => { S.qa.idx = parseInt(b.dataset.j); S.qa.dirty = false; closeModal(); drawQA(); });
+  };
+  $('#qFinish').onclick = async () => {
+    modal('<div class="fin-body"><div class="spinner dark"></div><h3>Saving…</h3><p>Please wait while we save your interview and prepare the AI recommended solutions.</p></div>');
+    try {
+      const ta = $('#qAns');
+      if (ta && ta.value !== (q.answer || '')) {
+        const r = await api('/api/questions/' + q.id + '/answer', { method: 'POST', body: JSON.stringify({ answer: ta.value }) });
+        S.qa.interview = r.interview;
+      }
+      S.qa.dirty = false;
+      try { await api('/api/interviews/' + S.qa.id + '/analyze', { method: 'POST' }); } catch (err) { /* analysis stays optional if there are no answers or AI is busy */ }
+      const m = $('#modalRoot .modal');
+      if (m) m.innerHTML = '<div class="fin-body"><div class="reg-success-ico">✅</div><h3>Interview finished!</h3><p>Your answers are saved. Open your results to see key findings, pain points and the AI-recommended solutions.</p><button class="btn btn-primary btn-block" id="doneIv">Done Interview</button></div>';
+      const d = $('#doneIv');
+      if (d) d.onclick = () => { closeModal(); go('results', S.qa.id); };
+    } catch (err) { closeModal(); toast(err.message, 'error'); }
   };
 }
 /* ---------- questions bank ---------- */
@@ -484,19 +549,23 @@ async function editQuestion(qid, after) {
 async function pResults(selId) {
   view().innerHTML = skel(3);
   try {
-    const all = (await api('/api/interviews')).interviews;
+    if (!S.scope) S.scope = 'mine';
+    const allQ = (isAdmin() && S.scope === 'all') ? '?scope=all' : '';
+    const all = (await api('/api/interviews' + allQ)).interviews;
     if (!all.length) { view().innerHTML = '<div class="card"><div class="empty"><div class="big">💡</div><p>No interviews yet.</p></div></div>'; return; }
     const id = selId || all[0].id;
-    const d = await api('/api/interviews/' + id);
-    const s = await api('/api/interviews/' + id + '/suggestion');
-    const qa = (await api('/api/interviews/' + id + '/questions')).questions;
-    const st = await api('/api/stats').catch(() => null);
+    const d = await api('/api/interviews/' + id + allQ);
+    const s = await api('/api/interviews/' + id + '/suggestion' + allQ);
+    const qa = (await api('/api/interviews/' + id + '/questions' + allQ)).questions;
+    const st = await api('/api/stats' + allQ).catch(() => null);
     view().innerHTML = '<div class="card no-print"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">'
       + '<button class="btn btn-ghost btn-sm" id="rBack">← Back</button>'
-      + '<select id="rSel" style="flex:1;min-width:200px;border:1.5px solid var(--line);border-radius:10px;padding:9px 12px;background:var(--card);color:var(--ink)">' + all.map(i => '<option value="' + i.id + '"' + (i.id === id ? ' selected' : '') + '>' + esc(i.title) + ' (' + i.answerCount + '/' + i.questionCount + ')</option>').join('') + '</select>'
+      + '<select id="rSel" style="flex:1;min-width:200px;border:1.5px solid var(--line);border-radius:10px;padding:9px 12px;background:var(--card);color:var(--ink)">' + all.map(i => '<option value="' + i.id + '"' + (i.id === id ? ' selected' : '') + '>' + esc((S.scope === 'all' && i.ownerName ? '[' + i.ownerName + '] ' : '') + i.title) + ' (' + i.answerCount + '/' + i.questionCount + ')</option>').join('') + '</select>'
+      + (isAdmin() ? '<select id="rScope" style="border:1.5px solid var(--line);border-radius:10px;padding:9px 12px;background:var(--card);color:var(--ink)"><option value="mine"' + (S.scope === 'mine' ? ' selected' : '') + '>My data</option><option value="all"' + (S.scope === 'all' ? ' selected' : '') + '>All accounts</option></select>' : '')
       + '<button class="btn btn-primary btn-sm" id="rGen">Generate insights</button><button class="btn btn-ghost btn-sm" id="rPrint">🖨 Print</button></div></div><div id="rBody" style="margin-top:18px"></div>';
     $('#rBack').onclick = () => go('history');
     $('#rSel').onchange = (e) => pResults(e.target.value);
+    const rsc = $('#rScope'); if (rsc) rsc.onchange = (e) => { S.scope = e.target.value; pResults(); };
     $('#rPrint').onclick = () => doPrint('Insights — ' + d.interview.title);
     $('#rGen').onclick = async (e) => {
       const btn = e.currentTarget; btnLoading(btn, true, 'Analyzing answers…');
@@ -579,26 +648,31 @@ async function pHistory() {
   } catch (e) { view().innerHTML = '<div class="alert alert-error">Loading history… ' + esc(e.message) + '</div>'; }
 }
 /* ---------- summary report (cards per interview + functional print) ---------- */
-async function pReport(selId) {
+async function pReport(selId, scope) {
   view().innerHTML = skel(3);
   try {
-    const all = (await api('/api/interviews')).interviews;
+    if (scope) S.scope = scope;
+    if (!S.scope) S.scope = 'mine';
+    const allQ = (isAdmin() && S.scope === 'all') ? '?scope=all' : '';
+    const all = (await api('/api/interviews' + allQ)).interviews;
     if (!all.length) { view().innerHTML = '<div class="card"><div class="empty"><div class="big">📄</div><p>No interviews to report on yet.</p></div></div>'; return; }
     const id = selId || all[0].id;
-    const d = await api('/api/interviews/' + id);
+    const d = await api('/api/interviews/' + id + allQ);
     const iv = d.interview;
-    let sg = (await api('/api/interviews/' + id + '/suggestion')).suggestion;
-    const qa = (await api('/api/interviews/' + id + '/questions')).questions;
+    let sg = (await api('/api/interviews/' + id + '/suggestion' + allQ)).suggestion;
+    const qa = (await api('/api/interviews/' + id + '/questions' + allQ)).questions;
     view().innerHTML = '<div class="card no-print"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">'
       + '<button class="btn btn-ghost btn-sm" id="sBack">← Back</button>'
-      + '<select id="sSel" style="flex:1;min-width:200px;border:1.5px solid var(--line);border-radius:10px;padding:9px 12px;background:var(--card);color:var(--ink)">' + all.map(i => '<option value="' + i.id + '"' + (i.id === id ? ' selected' : '') + '>' + esc(i.title) + '</option>').join('') + '</select>'
+      + '<select id="sSel" style="flex:1;min-width:200px;border:1.5px solid var(--line);border-radius:10px;padding:9px 12px;background:var(--card);color:var(--ink)">' + all.map(i => '<option value="' + i.id + '"' + (i.id === id ? ' selected' : '') + '>' + esc((S.scope === 'all' && i.ownerName ? '[' + i.ownerName + '] ' : '') + i.title) + '</option>').join('') + '</select>'
+      + (isAdmin() ? '<select id="sScope" style="border:1.5px solid var(--line);border-radius:10px;padding:9px 12px;background:var(--card);color:var(--ink)"><option value="mine"' + (S.scope === 'mine' ? ' selected' : '') + '>My interviews</option><option value="all"' + (S.scope === 'all' ? ' selected' : '') + '>All accounts</option></select>' : '')
       + '<button class="btn btn-ghost btn-sm" id="sEdit">Edit</button><button class="btn btn-danger btn-sm" id="sDel">Delete</button>'
       + '<button class="btn btn-primary btn-sm" id="sGen">' + (sg ? 'Regenerate report' : 'Generate report') + '</button>'
       + '<button class="btn btn-ghost btn-sm" id="sPrint">🖨 Print / Export</button></div>'
-      + '<p class="sub" style="margin:10px 0 0">📌 Each finished interview below is a summary card — name, date & time auto-detected by AI. “Print / Export” prints the detail + all cards.</p></div>'
+      + '<p class="sub" style="margin:10px 0 0">' + (isAdmin() && S.scope === 'all' ? '👑 Administrator view — you can open, delete or reprint every account’s interview. Their answers also feed the whole analysis.' : '📌 Each finished interview below is a summary card — name, date & time auto-detected by AI. “Print / Export” prints the detail + all cards.') + '</p></div>'
       + '<h3 style="margin:20px 0 10px">🗂 Completed interview cards</h3><div class="grid g3" id="sumCards"></div><div id="sBody" style="margin-top:18px"></div>';
     $('#sBack').onclick = () => go('history');
     $('#sSel').onchange = (e) => pReport(e.target.value);
+    const sc = $('#sScope'); if (sc) sc.onchange = (e) => pReport(null, e.target.value);
     $('#sEdit').onclick = () => editInterview(id, () => pReport(id));
     $('#sDel').onclick = () => confirmDlg('Delete interview?', 'Are you sure you want to delete this interview?', 'Delete', async () => { await api('/api/interviews/' + id, { method: 'DELETE' }); toast('Interview deleted successfully.'); go('history'); });
     $('#sPrint').onclick = () => doPrint('Summary report — ' + iv.title);
@@ -617,11 +691,15 @@ async function pReport(selId) {
         + '<div class="row"><small>⏰ Time</small><span>' + esc(c.takenTime || autoTime(c)) + ' (auto-detected)</span></div>'
         + '<div class="row"><small>👥 Stakeholders</small><span>' + esc(c.stakeholders) + '</span></div>'
         + '<div class="row"><small>✅ Progress</small><span>' + c.answerCount + '/' + c.questionCount + ' answered</span></div>'
-        + (c.ownerAvatar ? '<div class="row"><small>🖼 Profile</small><span><img class="sum-avatar sm" src="' + esc(c.ownerAvatar) + '" alt="avatar"> <b>' + esc(c.ownerName) + '</b></span></div>' : '')
-        + '</div><div class="sum-foot no-print"><button class="btn btn-primary btn-sm" data-v="' + c.id + '">Open</button><button class="btn btn-ghost btn-sm" data-p="' + c.id + '">🖨 Print</button></div></div>';
+        + (c.ownerName ? '<div class="row"><small>👤 Owner</small><span>' + (c.ownerAvatar ? '<img class="sum-avatar sm" src="' + esc(c.ownerAvatar) + '" alt="avatar"> ' : '') + '<b>' + esc(c.ownerName) + '</b></span></div>' : '')
+        + '</div><div class="sum-foot no-print"><button class="btn btn-primary btn-sm" data-v="' + c.id + '">Open</button><button class="btn btn-ghost btn-sm" data-p="' + c.id + '">🖨 Print</button>' + (isAdmin() ? '<button class="btn btn-danger btn-sm" data-d="' + c.id + '">Delete</button>' : '') + '</div></div>';
     }).join('');
     $$('#sumCards [data-v]').forEach(b => b.onclick = () => pReport(b.dataset.v));
     $$('#sumCards [data-p]').forEach(b => b.onclick = () => { const t = all.find(x => x.id === b.dataset.p); pReport(b.dataset.p); setTimeout(() => doPrint('Summary — ' + (t ? t.title : '')), 450); });
+    $$('#sumCards [data-d]').forEach(b => b.onclick = () => {
+      const t = all.find(x => x.id === b.dataset.d);
+      confirmDlg('Delete interview?', 'Delete "' + (t ? t.title : '') + '"? This permanently removes its questions, answers and AI report.', 'Delete', async () => { await api('/api/interviews/' + b.dataset.d, { method: 'DELETE' }); toast('Interview deleted.'); pReport(null, S.scope); });
+    });
     const sec = (t, arr) => '<h4>' + t + '</h4><ul>' + (arr || []).map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>';
     const li = (arr) => (arr || []).map(x => '<li>' + esc(x) + '</li>').join('');
     const ansN = qa.filter(q => q.answer && q.answer.trim()).length;
@@ -660,8 +738,8 @@ async function pProfile() {
     $('#pfAvatarFile').onchange = (e) => {
       const f = e.target.files && e.target.files[0];
       if (!f) return;
-      fileToDataUrl(f, 256, (data) => {
-        if (!data) { toast('Could not read that image.', 'error'); return; }
+      openCropper(f, (data) => {
+        if (!data) { toast('Could not process that image.', 'error'); return; }
         avatarData = data; avatarChanged = true;
         $('#pfPrev').innerHTML = '<img src="' + esc(data) + '" alt="avatar">';
         $('#pfAvatarSave').disabled = false;

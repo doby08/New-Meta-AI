@@ -54,6 +54,14 @@ a{color:var(--accent)}
 .reg-success-body h2{margin:0 0 8px;font-size:18.5px}
 .reg-success-body p{color:var(--muted);font-size:13.5px;margin:0 0 20px}
 .reg-success-body .spinner.dark{width:28px;height:28px;border-width:3px}
+/* finish interview overlay + image cropper */
+.fin-body{text-align:center;padding:26px 12px}
+.fin-body h3{margin:0 0 8px;font-size:17px}
+.fin-body p{color:var(--muted);font-size:13.5px;margin:0}
+.fin-body .spinner.dark{width:34px;height:34px;border-width:3px;margin-bottom:14px}
+.crop-view{width:260px;height:260px;max-width:100%;overflow:hidden;border-radius:14px;position:relative;margin:0 auto;background:var(--progress);touch-action:none;cursor:grab;border:1px solid var(--line)}
+.crop-view:active{cursor:grabbing}
+.crop-view img{position:absolute;left:0;top:0;transform-origin:0 0;user-select:none;pointer-events:none;max-width:none}
 /* ---------- layout ---------- */
 #appShell{display:flex;min-height:100vh}
 .sidebar{width:262px;flex-shrink:0;background:linear-gradient(180deg,var(--navy),var(--navy2));color:#dbe4ff;display:flex;flex-direction:column;position:sticky;top:0;height:100vh;z-index:40}

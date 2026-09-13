@@ -103,8 +103,8 @@ const getSite = () => { if (!DB.site) DB.site = {}; return { logo: DB.site.logo 
 function saveSite(patch) { DB.site = { ...DB.site, ...patch }; persist(); return getSite(); }
 const getSettings = (uidv) => { if (!DB.settings[uidv]) { DB.settings[uidv] = defaultSettings(); persist(); } return DB.settings[uidv]; };
 function saveSettings(uidv, patch) { DB.settings[uidv] = { ...getSettings(uidv), ...patch }; persist(); return DB.settings[uidv]; }
-const listInterviews = (userId) => DB.interviews.filter(i => i.userId === userId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-const getInterview = (userId, id) => DB.interviews.find(i => i.id === id && i.userId === userId);
+const listInterviews = (userId) => (userId ? DB.interviews.filter(i => i.userId === userId) : DB.interviews.slice()).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+const getInterview = (userId, id) => DB.interviews.find(i => i.id === id && (!userId || i.userId === userId)) || null;
 function withCounts(iv) {
   const qs = DB.questions.filter(q => q.interviewId === iv.id);
   const owner = iv.userId ? DB.users.find(u => u.id === iv.userId) : null;
@@ -121,7 +121,7 @@ function updateInterview(userId, id, d) {
   iv.updatedAt = now(); persist(); return withCounts(iv);
 }
 function deleteInterview(userId, id) {
-  const ix = DB.interviews.findIndex(i => i.id === id && i.userId === userId); if (ix < 0) return false;
+  const ix = DB.interviews.findIndex(i => i.id === id && (!userId || i.userId === userId)); if (ix < 0) return false;
   DB.interviews.splice(ix, 1);
   DB.questions = DB.questions.filter(q => q.interviewId !== id);
   DB.suggestions = DB.suggestions.filter(s => s.interviewId !== id);
@@ -186,7 +186,7 @@ function saveSuggestion(userId, interviewId, data, source) {
   DB.suggestions.push(row); persist(); return row;
 }
 function stats(userId) {
-  const ivs = DB.interviews.filter(i => i.userId === userId);
+  const ivs = userId ? DB.interviews.filter(i => i.userId === userId) : DB.interviews.slice();
   const ids = new Set(ivs.map(i => i.id));
   const qs = DB.questions.filter(q => ids.has(q.interviewId));
   const sg = DB.suggestions.filter(s => ids.has(s.interviewId));
