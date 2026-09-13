@@ -14,7 +14,7 @@
 <!-- Print-only university letterhead -->
 <div id="printHead" class="print-only">
   <div class="ph-row">
-    <div class="ph-logo">AI</div>
+    <div class="ph-logo" id="printLogo">AI</div>
     <div>
       <b>AI Assistance Interview System</b>
       <span>Western Philippines University · Main Campus</span>
@@ -25,29 +25,69 @@
 </div>
 <!-- Login screen -->
 <div id="loginScreen" class="login-screen hidden">
-  <div class="login-card">
-    <div class="login-brand"><div class="login-logo">AI</div>
+  <!-- SIGN IN CARD -->
+  <div class="login-card" id="loginCard">
+    <div class="login-brand"><div class="login-logo" id="loginLogo">AI</div>
       <div><h1>AI Assistance<br>Interview System</h1><p>Western Philippines University · Main Campus</p></div>
     </div>
     <div id="loginError" class="alert alert-error hidden"></div>
+    <div id="loginOk" class="alert alert-ok hidden"></div>
     <form id="loginForm" autocomplete="off">
-      <label class="field"><span>Username</span>
-        <input id="loginUser" type="text" placeholder="Enter username" autocomplete="username">
+      <label class="field"><span>Username or email</span>
+        <input id="loginUser" type="text" placeholder="Enter username or email" autocomplete="username">
       </label>
       <label class="field"><span>Password</span>
         <span class="pw-wrap"><input id="loginPass" type="password" placeholder="Enter password" autocomplete="current-password">
         <button type="button" id="pwToggle" class="icon-btn" title="Show/Hide password" aria-label="Show or hide password">👁</button></span>
       </label>
       <button id="loginBtn" class="btn btn-primary btn-block" type="submit"><span class="btn-label">Sign in</span><span class="spinner hidden"></span></button>
-      <p class="login-hint">Sign in with your administrator account to continue.</p>
+      <p class="login-hint">Sign in with your administrator or member account to continue.</p>
     </form>
+    <div class="auth-switch"><span>New here?</span><button type="button" class="btn btn-ghost btn-sm" id="toRegister">Create account</button></div>
+  </div>
+
+  <!-- CREATE ACCOUNT CARD -->
+  <div class="login-card hidden" id="registerCard">
+    <div class="login-brand"><div class="login-logo">AI</div>
+      <div><h1>Create<br>Account</h1><p>Set up your own AI interviews</p></div>
+    </div>
+    <div id="regError" class="alert alert-error hidden"></div>
+    <form id="registerForm" autocomplete="off">
+      <label class="field"><span>Full name</span>
+        <input id="regName" type="text" placeholder="e.g. Juan Dela Cruz" autocomplete="name">
+      </label>
+      <label class="field"><span>Email</span>
+        <input id="regEmail" type="email" placeholder="you@example.com" autocomplete="email">
+      </label>
+      <label class="field"><span>Password</span>
+        <span class="pw-wrap"><input id="regPass" type="password" placeholder="At least 6 characters" autocomplete="new-password">
+        <button type="button" id="pwToggle2" class="icon-btn" title="Show/Hide password" aria-label="Show or hide password">👁</button></span>
+      </label>
+      <label class="field"><span>Confirm password</span>
+        <span class="pw-wrap"><input id="regPass2" type="password" placeholder="Repeat password" autocomplete="new-password">
+        <button type="button" id="pwToggle3" class="icon-btn" title="Show/Hide password" aria-label="Show or hide password">👁</button></span>
+      </label>
+      <button id="regBtn" class="btn btn-primary btn-block" type="submit"><span class="btn-label">Create account</span><span class="spinner hidden"></span></button>
+      <p class="login-hint">Your username is generated automatically from your email. Sign in with your email after creating the account.</p>
+    </form>
+    <div class="auth-switch"><span>Already registered?</span><button type="button" class="btn btn-ghost btn-sm" id="toLogin">Sign in</button></div>
+  </div>
+
+  <!-- ACCOUNT CREATED LOADING OVERLAY -->
+  <div class="login-card hidden" id="regSuccess">
+    <div class="reg-success-body">
+      <div class="reg-success-ico">✅</div>
+      <h2>Successfully created account!</h2>
+      <p>Your account is ready. Redirecting you to sign in…</p>
+      <div class="spinner dark"></div>
+    </div>
   </div>
 </div>
 
 <!-- App shell -->
 <div id="appShell" class="hidden">
   <aside id="sidebar" class="sidebar">
-    <div class="side-brand"><div class="side-logo">AI</div><div><b>AI Assistance Interview</b><small>System · WPU Main Campus</small></div></div>
+    <div class="side-brand"><div class="side-logo" id="sideLogo">AI</div><div><b>AI Assistance Interview</b><small>System · WPU Main Campus</small></div></div>
     <nav id="sideNav" class="side-nav"></nav>
     <div class="side-foot"><div class="side-user"><div class="avatar" id="sideAvatar">D</div><div><b id="sideUser">Dan</b><small id="sideRole">Administrator</small></div></div></div>
   </aside>

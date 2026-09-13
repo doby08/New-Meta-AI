@@ -47,6 +47,13 @@ a{color:var(--accent)}
 .login-brand h1{font-size:21px;line-height:1.2;margin:0}
 .login-brand p{margin:4px 0 0;color:var(--muted);font-size:13px}
 .login-hint{margin:14px 0 0;font-size:12.5px;color:var(--hint-ink,var(--muted));background:var(--hint-bg,#f4f6fd);border:1px solid var(--hint-bd,var(--line));border-radius:10px;padding:10px 12px}
+.auth-switch{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:14px;padding:10px 12px;border:1px solid var(--hint-bd,var(--line));border-radius:10px;background:var(--hint-bg,#f4f6fd)}
+.auth-switch span{font-size:12.5px;color:var(--hint-ink,var(--muted))}
+.reg-success-body{text-align:center;padding:36px 20px}
+.reg-success-ico{width:76px;height:76px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:40px;background:var(--ok-bg,#dcfce7);margin:0 auto 14px}
+.reg-success-body h2{margin:0 0 8px;font-size:18.5px}
+.reg-success-body p{color:var(--muted);font-size:13.5px;margin:0 0 20px}
+.reg-success-body .spinner.dark{width:28px;height:28px;border-width:3px}
 /* ---------- layout ---------- */
 #appShell{display:flex;min-height:100vh}
 .sidebar{width:262px;flex-shrink:0;background:linear-gradient(180deg,var(--navy),var(--navy2));color:#dbe4ff;display:flex;flex-direction:column;position:sticky;top:0;height:100vh;z-index:40}
@@ -62,6 +69,10 @@ a{color:var(--accent)}
 .side-foot{padding:14px;border-top:1px solid rgba(255,255,255,.12)}
 .side-user{display:flex;gap:10px;align-items:center}
 .avatar{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,var(--blue),var(--cyan));display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff}
+.avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+.avatar.sm{width:30px;height:30px;font-size:13px}
+.avatar.lg{width:64px;height:64px;font-size:24px}
+.login-logo img,.side-logo img,.ph-logo img{width:100%;height:100%;object-fit:cover;border-radius:inherit}
 .side-user b{display:block;font-size:13.5px;color:#fff}
 .side-user small{color:#93a3d4}
 .sidebar-scrim{display:none}
@@ -102,6 +113,8 @@ a{color:var(--accent)}
 .btn-sm{padding:7px 12px;font-size:12.5px;border-radius:9px}
 .field{display:block;margin-bottom:14px}
 .field>span{display:block;font-size:13px;font-weight:600;margin-bottom:6px}
+.pic-panel{display:block;margin:0 0 14px;border:1px dashed var(--line);border-radius:12px;padding:12px 14px;background:var(--card)}
+.pic-panel b{font-size:13px;font-weight:600}
 .field input,.field select,.field textarea{width:100%;border:1.5px solid var(--line);border-radius:11px;padding:11px 13px;font:500 14px 'Inter',sans-serif;background:var(--input);color:var(--ink);transition:.15s}
 .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--accent);background:var(--card);box-shadow:0 0 0 3px rgba(59,110,246,.14)}
 .field input::placeholder,.field textarea::placeholder{color:var(--input-ph);opacity:.85}
@@ -235,6 +248,8 @@ tr:hover td{background:var(--hover)}
 .sum-top.draft{background:linear-gradient(135deg,#475569,#64748b)}
 .sum-top b{font-size:15px;display:block;line-height:1.35}
 .sum-top small{opacity:.92;font-size:12px}
+.sum-avatar{width:42px;height:42px;border-radius:50%;flex-shrink:0;object-fit:cover;border:2px solid rgba(255,255,255,.9)}
+.sum-avatar.sm{width:20px;height:20px;object-fit:cover;border:1px solid var(--line);vertical-align:-4px;margin-right:3px;border-radius:50%}
 .sum-body{padding:14px 18px;font-size:13px}
 .sum-body .row{display:flex;gap:8px;align-items:center;padding:5px 0}
 .sum-body .row small{color:var(--muted);min-width:88px;font-weight:600}

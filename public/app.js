@@ -4,10 +4,12 @@ const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
 const esc = (v) => String(v === undefined || v === null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const view = () => $('#view');
 
-const S = { user: null, aiMode: 'local-smart', aiModel: '', settings: { theme: 'light', itemsPerPage: 8, defaultQuestionCount: 20 }, route: 'home', charts: [], qa: { id: null, list: [], idx: 0, dirty: false }, sliderT: null };
+const S = { user: null, aiMode: 'local-smart', aiModel: '', settings: { theme: 'light', itemsPerPage: 8, defaultQuestionCount: 20 }, route: 'home', charts: [], qa: { id: null, list: [], idx: 0, dirty: false }, sliderT: null, site: { logo: null } };
 
-const TITLES = { home: ['Home', 'AI Assistance Interview System · WPU Main Campus'], dashboard: ['Dashboard', 'System overview & activity'], create: ['Create Interview', 'Start a new stakeholder interview'], my: ['My Interviews', 'Answer questions & manage interviews'], bank: ['Questions Bank', 'Search, filter & manage questions'], results: ['Results & Suggestions', 'Patterns, insights & graph line analysis'], history: ['History', 'All saved interviews'], report: ['Summary Report', 'Cards per interview + printable report'], profile: ['Profile', 'Account information'], settings: ['Settings', 'Theme, preferences & AI configuration'] };
-const MENU = [['home', '🏠', 'Home'], ['dashboard', '📊', 'Dashboard'], ['create', '➕', 'Create Interview'], ['my', '🎙', 'My Interviews'], ['bank', '📚', 'Questions Bank'], ['results', '💡', 'Results & Suggestions'], ['history', '🕘', 'History'], ['report', '📄', 'Summary Report'], ['profile', '👤', 'Profile'], ['settings', '⚙', 'Settings']];
+const isAdmin = () => S.user && S.user.role === 'Administrator';
+
+const TITLES = { home: ['Home', 'AI Assistance Interview System · WPU Main Campus'], dashboard: ['Dashboard', 'System overview & activity'], create: ['Create Interview', 'Start a new stakeholder interview'], my: ['My Interviews', 'Answer questions & manage interviews'], bank: ['Questions Bank', 'Search, filter & manage questions'], results: ['Results & Suggestions', 'Patterns, insights & graph line analysis'], history: ['History', 'All saved interviews'], report: ['Summary Report', 'Cards per interview + printable report'], profile: ['Profile', 'Account information'], users: ['Accounts', 'Manage system users (Administrator)'], settings: ['Settings', 'Theme, preferences & AI configuration'] };
+const MENU = [['home', '🏠', 'Home'], ['dashboard', '📊', 'Dashboard'], ['create', '➕', 'Create Interview'], ['my', '🎙', 'My Interviews'], ['bank', '📚', 'Questions Bank'], ['results', '💡', 'Results & Suggestions'], ['history', '🕘', 'History'], ['report', '📄', 'Summary Report'], ['profile', '👤', 'Profile'], ['users', '👥', 'Accounts'], ['settings', '⚙', 'Settings']];
 
 /* ---------- tiny helpers ---------- */
 function toast(msg, type) {
@@ -44,28 +46,63 @@ function confirmDlg(title, text, okLabel, onOk) {
 }
 const badge = (s) => '<span class="badge b-' + esc(s) + '">' + esc(s) + '</span>';
 const skel = (n) => Array.from({ length: n || 3 }, () => '<div class="skel" style="margin-bottom:12px"></div>').join('');
+/* downscale an uploaded image to a small JPEG data URL (avatar / logo) */
+function fileToDataUrl(file, maxDim, cb) {
+  if (!file || !cb) return;
+  const url = URL.createObjectURL(file);
+  const img = document.createElement('img');
+  img.onload = () => {
+    try {
+      const w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+      const sc = Math.min(1, (maxDim || 256) / Math.max(w, h));
+      const W = Math.max(1, Math.round(w * sc)), H = Math.max(1, Math.round(h * sc));
+      const c = document.createElement('canvas');
+      c.width = W; c.height = H;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0, W, H);
+      URL.revokeObjectURL(url);
+      cb(c.toDataURL('image/jpeg', 0.82));
+    } catch (err) { URL.revokeObjectURL(url); cb(''); }
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); cb(''); };
+  img.src = url;
+}
 /* ---------- auth & shell ---------- */
 function showLogin() {
   S.user = null;
   $('#appShell').classList.add('hidden');
   $('#loginScreen').classList.remove('hidden');
   $('#loginError').classList.add('hidden');
+  $('#loginOk').classList.add('hidden');
+  $('#registerCard').classList.add('hidden');
+  $('#regSuccess').classList.add('hidden');
+  $('#loginCard').classList.remove('hidden');
 }
 function showApp() {
   $('#loginScreen').classList.add('hidden');
   $('#appShell').classList.remove('hidden');
   $('#sideUser').textContent = S.user.displayName || S.user.username;
   $('#sideRole').textContent = S.user.role || 'User';
-  $('#sideAvatar').textContent = (S.user.displayName || S.user.username || 'U').slice(0, 1).toUpperCase();
+  const av = $('#sideAvatar');
+  if (S.user.avatar) av.innerHTML = '<img src="' + esc(S.user.avatar) + '" alt="avatar">';
+  else av.innerHTML = esc((S.user.displayName || S.user.username || 'U').slice(0, 1).toUpperCase());
   $('#aiBadge').textContent = S.aiMode === 'openai' ? '✨ AI: ' + (S.aiModel || 'OpenAI') : '🧠 AI: Built-in Smart';
   renderNav();
 }
 function renderNav() {
-  $('#sideNav').innerHTML = MENU.map(m =>
+  const items = MENU.filter(m => m[0] !== 'users' || isAdmin());
+  $('#sideNav').innerHTML = items.map(m =>
     '<button class="side-link' + (S.route === m[0] ? ' active' : '') + '" data-r="' + m[0] + '"><span class="ic">' + m[1] + '</span>' + m[2] + '</button>').join('')
     + '<button class="side-link" id="navLogout"><span class="ic">🚪</span>Logout</button>';
   $$('#sideNav .side-link[data-r]').forEach(b => b.onclick = () => go(b.dataset.r));
   $('#navLogout').onclick = askLogout;
+}
+function applySiteLogo() {
+  const logo = (S.site && S.site.logo) || '';
+  const set = (el) => { if (el) el.innerHTML = logo ? '<img src="' + esc(logo) + '" alt="logo">' : 'AI'; };
+  set($('#loginLogo')); set($('#sideLogo')); set($('#printLogo'));
+  const fav = document.querySelector("link[rel='icon']");
+  if (fav) fav.href = logo || 'data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 100 100\'><rect width=\'100\' height=\'100\' rx=\'22\' fill=\'%234f46e5\'/><text x=\'50\' y=\'68\' font-size=\'52\' text-anchor=\'middle\' fill=\'white\' font-family=\'Arial\' font-weight=\'bold\'>AI</text></svg>';
 }
 function destroyCharts() { S.charts.forEach(c => { try { c.destroy(); } catch {} }); S.charts = []; if (S.sliderT) { clearInterval(S.sliderT); S.sliderT = null; } }
 function go(route, param) {
@@ -80,7 +117,7 @@ function go(route, param) {
   $('#pageTitle').textContent = (TITLES[route] || TITLES.home)[0];
   $('#pageSub').textContent = (TITLES[route] || TITLES.home)[1];
   renderNav();
-  ({ home: pHome, dashboard: pDashboard, create: pCreate, my: pMy, bank: pBank, results: pResults, history: pHistory, report: pReport, profile: pProfile, settings: pSettings })[route](param);
+  ({ home: pHome, dashboard: pDashboard, create: pCreate, my: pMy, bank: pBank, results: pResults, history: pHistory, report: pReport, profile: pProfile, users: pUsers, settings: pSettings })[route](param);
 }
 /* ---------- theme (night / light, always readable) ---------- */
 function applyTheme(t) {
@@ -107,10 +144,47 @@ async function boot() {
   $('#sideScrim').onclick = () => document.body.classList.remove('nav-open');
   $('#logoutBtnTop').onclick = askLogout;
   $('#themeBtn').onclick = toggleTheme;
+  /* ---- register / login card switching ---- */
+  $('#toRegister').onclick = () => { $('#loginCard').classList.add('hidden'); $('#regSuccess').classList.add('hidden'); $('#registerCard').classList.remove('hidden'); $('#regError').classList.add('hidden'); };
+  $('#toLogin').onclick = () => { $('#registerCard').classList.add('hidden'); $('#loginCard').classList.remove('hidden'); $('#loginOk').classList.add('hidden'); };
+  $('#pwToggle2').onclick = () => { const p = $('#regPass'); p.type = p.type === 'password' ? 'text' : 'password'; $('#pwToggle2').textContent = p.type === 'password' ? '👁' : '🙈'; };
+  $('#pwToggle3').onclick = () => { const p = $('#regPass2'); p.type = p.type === 'password' ? 'text' : 'password'; $('#pwToggle3').textContent = p.type === 'password' ? '👁' : '🙈'; };
+  $('#registerForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = $('#regName').value.trim(), email = $('#regEmail').value.trim();
+    const p1 = $('#regPass').value, p2 = $('#regPass2').value;
+    const err = $('#regError');
+    if (!name) { err.textContent = 'Please enter your full name.'; err.classList.remove('hidden'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { err.textContent = 'Please enter a valid email address.'; err.classList.remove('hidden'); return; }
+    if (p1.length < 6) { err.textContent = 'Password must be at least 6 characters long.'; err.classList.remove('hidden'); return; }
+    if (p1 !== p2) { err.textContent = 'Passwords do not match.'; err.classList.remove('hidden'); return; }
+    const btn = $('#regBtn');
+    btn.disabled = true; btn.querySelector('.btn-label').textContent = 'Creating account…'; btn.querySelector('.spinner').classList.remove('hidden');
+    try {
+      await api('/api/register', { method: 'POST', body: JSON.stringify({ name, email, password: p1 }) });
+      $('#regError').classList.add('hidden');
+      $('#registerCard').classList.add('hidden');
+      $('#regSuccess').classList.remove('hidden');
+      setTimeout(() => {
+        $('#regSuccess').classList.add('hidden');
+        $('#loginCard').classList.remove('hidden');
+        $('#loginUser').value = email;
+        $('#loginOk').textContent = '✅ Successfully created account — sign in with your email to continue.';
+        $('#loginOk').classList.remove('hidden');
+        $('#loginPass').value = ''; $('#regName').value = ''; $('#regEmail').value = ''; $('#regPass').value = ''; $('#regPass2').value = '';
+        btn.disabled = false; btn.querySelector('.btn-label').textContent = 'Create account'; btn.querySelector('.spinner').classList.add('hidden');
+      }, 2200);
+    } catch (ex) {
+      err.textContent = ex.message; err.classList.remove('hidden');
+      btn.disabled = false; btn.querySelector('.btn-label').textContent = 'Create account'; btn.querySelector('.spinner').classList.add('hidden');
+    }
+  });
+  api('/api/site').then(j => { S.site = j.site || {}; applySiteLogo(); }).catch(() => {});
   $('#loginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const u = $('#loginUser').value.trim(), p = $('#loginPass').value;
     const err = $('#loginError');
+    $('#loginOk').classList.add('hidden');
     if (!u || !p) { err.textContent = 'Please enter both username and password.'; err.classList.remove('hidden'); return; }
     const btn = $('#loginBtn');
     btn.disabled = true; btn.querySelector('.btn-label').textContent = 'Logging in…'; btn.querySelector('.spinner').classList.remove('hidden');
@@ -536,13 +610,14 @@ async function pReport(selId) {
     // one card per interview: name + auto-detected date/time + details
     $('#sumCards').innerHTML = all.map(c => {
       const cls = c.status === 'completed' ? 'done' : c.status === 'in-progress' ? 'prog' : 'draft';
-      return '<div class="sum-card"><div class="sum-top ' + cls + '"><b>' + esc(c.title) + '</b><small>' + esc(c.interviewee || c.stakeholders.split(',')[0] || '—') + ' · ' + badge(c.status) + '</small></div>'
+      return '<div class="sum-card"><div class="sum-top ' + cls + '"><div style="display:flex;gap:10px;align-items:center">' + (c.ownerAvatar ? '<img class="sum-avatar" src="' + esc(c.ownerAvatar) + '" alt="avatar">' : '') + '<div style="flex:1;min-width:0"><b>' + esc(c.title) + '</b><small>' + esc(c.interviewee || c.stakeholders.split(',')[0] || '—') + ' · ' + badge(c.status) + '</small></div></div></div>'
         + '<div class="sum-body">'
         + '<div class="row"><small>👤 Name</small><span><b>' + esc(c.interviewee || '—') + '</b></span></div>'
         + '<div class="row"><small>📅 Date</small><span>' + esc(c.date || '—') + '</span></div>'
         + '<div class="row"><small>⏰ Time</small><span>' + esc(c.takenTime || autoTime(c)) + ' (auto-detected)</span></div>'
         + '<div class="row"><small>👥 Stakeholders</small><span>' + esc(c.stakeholders) + '</span></div>'
         + '<div class="row"><small>✅ Progress</small><span>' + c.answerCount + '/' + c.questionCount + ' answered</span></div>'
+        + (c.ownerAvatar ? '<div class="row"><small>🖼 Profile</small><span><img class="sum-avatar sm" src="' + esc(c.ownerAvatar) + '" alt="avatar"> <b>' + esc(c.ownerName) + '</b></span></div>' : '')
         + '</div><div class="sum-foot no-print"><button class="btn btn-primary btn-sm" data-v="' + c.id + '">Open</button><button class="btn btn-ghost btn-sm" data-p="' + c.id + '">🖨 Print</button></div></div>';
     }).join('');
     $$('#sumCards [data-v]').forEach(b => b.onclick = () => pReport(b.dataset.v));
@@ -567,7 +642,10 @@ async function pProfile() {
   try {
     const j = await api('/api/profile'); const u = j.user;
     view().innerHTML = '<div class="grid g2"><div class="card"><h3>Profile</h3><p class="sub">Your account information.</p>'
-      + '<div style="display:flex;gap:14px;align-items:center;margin-bottom:16px"><div class="avatar" style="width:56px;height:56px;font-size:22px">' + esc((u.displayName || u.username).slice(0, 1).toUpperCase()) + '</div><div><b style="font-size:17px">' + esc(u.displayName || u.username) + '</b><br><small style="color:var(--muted)">' + esc(u.role) + ' · @' + esc(u.username) + '</small></div></div>'
+      + '<div style="display:flex;gap:14px;align-items:center;margin-bottom:16px"><div class="avatar lg" id="pfPrev">' + (u.avatar ? '<img src="' + esc(u.avatar) + '" alt="avatar">' : esc((u.displayName || u.username).slice(0, 1).toUpperCase())) + '</div><div><b style="font-size:17px">' + esc(u.displayName || u.username) + '</b><br><small style="color:var(--muted)">' + esc(u.role) + ' · @' + esc(u.username) + '</small></div></div>'
+      + '<div class="pic-panel"><b>Profile picture</b><br><small style="color:var(--muted)">Shown in the sidebar and on your summary cards.</small><br>'
+      + '<input id="pfAvatarFile" type="file" accept="image/*" style="margin-top:8px"><br>'
+      + '<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"><button class="btn btn-primary btn-sm" id="pfAvatarSave" disabled>Upload picture</button><button class="btn btn-ghost btn-sm" id="pfAvatarRemove">Remove</button></div></div>'
       + '<label class="field"><span>Display name</span><input id="pfName" value="' + esc(u.displayName || '') + '"></label>'
       + '<label class="field"><span>Email</span><input id="pfEmail" value="' + esc(u.email || '') + '" placeholder="you@example.com"></label>'
       + '<button class="btn btn-primary" id="pfSave">Save profile</button></div>'
@@ -578,6 +656,32 @@ async function pProfile() {
       + '<p class="login-hint">Username: <b>' + esc(u.username) + '</b> · Member since ' + esc(String(u.createdAt || '').slice(0, 10)) + '</p></div></div>';
     const tg = (b, i) => $(b).onclick = () => { const p = $(i); p.type = p.type === 'password' ? 'text' : 'password'; };
     tg('#t1', '#pwCur'); tg('#t2', '#pwNew');
+    let avatarData = null, avatarChanged = false;
+    $('#pfAvatarFile').onchange = (e) => {
+      const f = e.target.files && e.target.files[0];
+      if (!f) return;
+      fileToDataUrl(f, 256, (data) => {
+        if (!data) { toast('Could not read that image.', 'error'); return; }
+        avatarData = data; avatarChanged = true;
+        $('#pfPrev').innerHTML = '<img src="' + esc(data) + '" alt="avatar">';
+        $('#pfAvatarSave').disabled = false;
+      });
+    };
+    $('#pfAvatarSave').onclick = async (e) => {
+      if (!avatarChanged) return;
+      const btn = e.currentTarget; btnLoading(btn, true, 'Uploading…');
+      try {
+        const r = await api('/api/profile', { method: 'PUT', body: JSON.stringify({ avatar: avatarData }) });
+        S.user = r.user; avatarData = null; avatarChanged = false; showApp(); toast('Profile picture updated.'); pProfile();
+      } catch (err) { btnLoading(btn, false); toast(err.message, 'error'); }
+    };
+    $('#pfAvatarRemove').onclick = async (e) => {
+      const btn = e.currentTarget; btnLoading(btn, true, 'Removing…');
+      try {
+        const r = await api('/api/profile', { method: 'PUT', body: JSON.stringify({ avatar: null }) });
+        S.user = r.user; avatarData = null; avatarChanged = false; showApp(); toast('Profile picture removed.'); pProfile();
+      } catch (err) { btnLoading(btn, false); toast(err.message, 'error'); }
+    };
     $('#pfSave').onclick = async (e) => {
       const btn = e.currentTarget; btnLoading(btn, true, 'Saving…');
       try { const r = await api('/api/profile', { method: 'PUT', body: JSON.stringify({ displayName: $('#pfName').value, email: $('#pfEmail').value }) }); S.user = r.user; showApp(); toast('Profile updated.'); pProfile(); }
@@ -608,7 +712,12 @@ async function pSettings() {
       + '<div class="card"><h3>AI configuration</h3><p class="sub">Status of the AI engine. The key stays on the server.</p>'
       + '<div class="alert ' + (S.aiMode === 'openai' ? 'alert-ok' : '') + '">Engine: <b>' + (S.aiMode === 'openai' ? 'OpenAI ' + esc(S.aiModel) : 'Built-in Smart Generator') + '</b><br><small>' + (S.aiMode === 'openai' ? 'Set OPENAI_API_KEY is configured. Questions and analysis use OpenAI.' : 'No OPENAI_API_KEY detected — the app uses its built-in adaptive generator. Add a key in .env to enable OpenAI.') + '</small></div>'
       + '<label class="field"><span>Preferred OpenAI model</span><input id="sModel" value="' + esc(st.aiModel || 'gpt-4o-mini') + '"></label>'
-      + '<button class="btn btn-ghost" id="sModelSave">Save AI preference</button></div></div>';
+      + '<button class="btn btn-ghost" id="sModelSave">Save AI preference</button></div>'
+      + (isAdmin() ? '<div class="card"><h3>🖼️ AI logo (site branding)</h3><p class="sub">Administrator only — this logo appears on the sign-in screen, sidebar, browser tab and printed reports.</p>'
+        + '<div class="avatar lg" id="logoPrev">AI</div>'
+        + '<div style="margin-top:8px"><input id="sLogoFile" type="file" accept="image/*"><br><small style="color:var(--muted)">PNG / JPG recommended · auto-resized</small></div>'
+        + '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap"><button class="btn btn-primary btn-sm" id="sLogoSave" disabled>Save logo</button><button class="btn btn-ghost btn-sm" id="sLogoReset">Reset to “AI” text</button></div></div>' : '')
+      + '</div>';
     document.documentElement.style.setProperty('--accent', st.accent === 'purple' ? '#7c3aed' : st.accent === 'cyan' ? '#06b6d4' : '#3b6ef6');
     applyTheme(st.theme || 'light');
     const setT = async (t) => { applyTheme(t); S.settings = (await api('/api/settings', { method: 'PUT', body: JSON.stringify({ theme: t }) })).settings; toast(t === 'dark' ? '🌙 Night mode on — still fully readable.' : '☀️ Light mode on.'); };
@@ -629,5 +738,88 @@ async function pSettings() {
       try { S.settings = (await api('/api/settings', { method: 'PUT', body: JSON.stringify({ aiModel: $('#sModel').value }) })).settings; toast('AI preference saved.'); btnLoading(btn, false); }
       catch (err) { btnLoading(btn, false); toast(err.message, 'error'); }
     };
+    if (isAdmin()) {
+      api('/api/site').then(r => { S.site = r.site || {}; const lp = $('#logoPrev'); if (lp) lp.innerHTML = S.site.logo ? '<img src="' + esc(S.site.logo) + '" alt="logo">' : 'AI'; }).catch(() => {});
+      let logoData = null, logoChanged = false;
+      $('#sLogoFile').onchange = (e) => {
+        const f = e.target.files && e.target.files[0];
+        if (!f) return;
+        fileToDataUrl(f, 160, (data) => {
+          if (!data) { toast('Could not read that image.', 'error'); return; }
+          logoData = data; logoChanged = true;
+          $('#logoPrev').innerHTML = '<img src="' + esc(data) + '" alt="logo">';
+          $('#sLogoSave').disabled = false;
+        });
+      };
+      $('#sLogoSave').onclick = async (e) => {
+        if (!logoChanged) return;
+        const btn = e.currentTarget; btnLoading(btn, true, 'Saving…');
+        try {
+          const r = await api('/api/site', { method: 'PUT', body: JSON.stringify({ logo: logoData }) });
+          S.site = r.site; logoChanged = false;
+          applySiteLogo(); toast('AI logo updated.'); btnLoading(btn, false); pSettings();
+        } catch (err) { btnLoading(btn, false); toast(err.message, 'error'); }
+      };
+      $('#sLogoReset').onclick = async (e) => {
+        const btn = e.currentTarget; btnLoading(btn, true, 'Resetting…');
+        try {
+          const r = await api('/api/site', { method: 'PUT', body: JSON.stringify({ logo: null }) });
+          S.site = r.site; applySiteLogo(); toast('AI logo reset to default.'); btnLoading(btn, false); pSettings();
+        } catch (err) { btnLoading(btn, false); toast(err.message, 'error'); }
+      };
+    }
   } catch (e) { view().innerHTML = '<div class="alert alert-error">' + esc(e.message) + '</div>'; }
+}
+/* ---------- accounts (administrator only) ---------- */
+async function pUsers() {
+  if (!isAdmin()) return go('dashboard');
+  view().innerHTML = skel(2);
+  try {
+    const j = await api('/api/admin/users');
+    view().innerHTML = '<div class="card"><h3>👥 Accounts</h3><p class="sub">All system users. As administrator you can edit their details or delete accounts. Your own account and the last administrator are protected.</p>'
+      + '<div class="toolbar"><input id="uSearch" placeholder="Search by name, email or username…"></div>'
+      + '<div id="userList"></div></div>';
+    const draw = () => {
+      const s = $('#uSearch').value.toLowerCase();
+      const rows = j.users.filter(u => (u.displayName + ' ' + u.email + ' ' + u.username).toLowerCase().includes(s));
+      $('#userList').innerHTML = '<div class="table-wrap"><table><tr><th>User</th><th>Email</th><th>Username</th><th>Role</th><th>Joined</th><th>Actions</th></tr>'
+        + rows.map(u => '<tr><td><div style="display:flex;gap:8px;align-items:center"><div class="avatar sm">' + (u.avatar ? '<img src="' + esc(u.avatar) + '" alt="avatar">' : esc((u.displayName || u.username).slice(0, 1).toUpperCase())) + '</div><b>' + esc(u.displayName) + '</b>' + (u.id === S.user.id ? '<span class="chip" style="margin-left:4px">you</span>' : '') + '</div></td>'
+        + '<td><small>' + esc(u.email || '—') + '</small></td>'
+        + '<td><small>@' + esc(u.username) + '</small></td>'
+        + '<td>' + (u.role === 'Administrator' ? '<span class="chip" style="background:linear-gradient(135deg,#3b6ef6,#7c3aed);color:#fff">Administrator</span>' : badge(u.role)) + '</td>'
+        + '<td><small>' + esc(String(u.createdAt || '').slice(0, 10)) + '</small></td>'
+        + '<td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" data-e="' + u.id + '">Edit</button> <button class="btn btn-danger btn-sm" data-d="' + u.id + '"' + (u.id === S.user.id ? ' disabled' : '') + '>Delete</button></td></tr>').join('')
+        + '</table></div>' || '<div class="empty"><div class="big">👥</div><p>No accounts match your search.</p></div>';
+      $$('#userList [data-e]').forEach(b => b.onclick = () => editUser(b.dataset.e, () => pUsers()));
+      $$('#userList [data-d]').forEach(b => b.onclick = () => {
+        const u = j.users.find(x => x.id === b.dataset.d);
+        confirmDlg('Delete account?', 'Delete "' + (u ? u.displayName : '') + '" (@' + (u ? u.username : '') + ')? This permanently removes all their interviews, questions and reports.', 'Delete', async () => {
+          await api('/api/admin/users/' + b.dataset.d, { method: 'DELETE' });
+          toast('Account deleted.'); pUsers();
+        });
+      });
+    };
+    let t; $('#uSearch').oninput = () => { clearTimeout(t); t = setTimeout(draw, 250); };
+    draw();
+  } catch (e) { view().innerHTML = '<div class="alert alert-error">' + esc(e.message) + '</div>'; }
+}
+function editUser(id, after) {
+  api('/api/admin/users').then(j => {
+    const u = j.users.find(x => x.id === id);
+    if (!u) return;
+    modal('<h3>Edit account</h3><p>Update details for <b>' + esc(u.displayName) + '</b>. A new password is optional.</p>'
+      + '<label class="field"><span>Display name</span><input id="aeName" value="' + esc(u.displayName) + '"></label>'
+      + '<label class="field"><span>Email</span><input id="aeEmail" value="' + esc(u.email) + '"></label>'
+      + '<label class="field"><span>Role</span><select id="aeRole"><option' + (u.role === 'User' ? ' selected' : '') + '>User</option><option' + (u.role === 'Administrator' ? ' selected' : '') + '>Administrator</option></select></label>'
+      + '<label class="field"><span>New password (min 6 characters, optional)</span><input id="aePass" type="password" placeholder="Leave empty to keep current" autocomplete="new-password"></label>'
+      + '<div class="modal-actions"><button class="btn btn-ghost" id="mCancel">Cancel</button><button class="btn btn-primary" id="mOk">Save changes</button></div>', true);
+    $('#mCancel').onclick = closeModal;
+    $('#mOk').onclick = async (e) => {
+      const btn = e.currentTarget; btnLoading(btn, true, 'Saving…');
+      try {
+        await api('/api/admin/users/' + id, { method: 'PUT', body: JSON.stringify({ displayName: $('#aeName').value, email: $('#aeEmail').value, role: $('#aeRole').value, newPassword: $('#aePass').value || undefined }) });
+        closeModal(); toast('Account updated.'); if (after) after(); else pUsers();
+      } catch (err) { btnLoading(btn, false); toast(err.message, 'error'); }
+    };
+  });
 }

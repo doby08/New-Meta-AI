@@ -8,7 +8,7 @@ const DATA_DIR = path.join(__dirname, 'data');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
 let DB = null;
 
-const emptyDb = () => ({ users: [], interviews: [], questions: [], suggestions: [], settings: {}, seq: 1 });
+const emptyDb = () => ({ users: [], interviews: [], questions: [], suggestions: [], settings: {}, site: {}, seq: 1 });
 const now = () => new Date().toISOString();
 const dayOf = (iso) => String(iso || '').slice(0, 10);
 const defaultSettings = () => ({ accent: 'blue', theme: 'light', itemsPerPage: 8, defaultQuestionCount: 20, aiModel: 'gpt-4o-mini', notifications: true, compact: false });
@@ -73,15 +73,42 @@ function seedSample(userId) {
 }
 
 const findUserByName = (u) => DB.users.find(x => x.username.toLowerCase() === String(u || '').toLowerCase());
+const findUserByLogin = (u) => {
+  const s = String(u || '').toLowerCase();
+  return DB.users.find(x => x.username.toLowerCase() === s || String(x.email || '').toLowerCase() === s);
+};
 const getUserById = (id) => DB.users.find(x => x.id === id);
-function safeUser(u) { return u ? { id: u.id, username: u.username, role: u.role, displayName: u.displayName || u.username, email: u.email || '', createdAt: u.createdAt } : null; }
+function safeUser(u) { return u ? { id: u.id, username: u.username, role: u.role, displayName: u.displayName || u.username, email: u.email || '', avatar: u.avatar || null, createdAt: u.createdAt } : null; }
+function createUser({ username, displayName, email, passwordHash }) {
+  const u = { id: uid('u'), username, passwordHash, role: 'User', displayName: displayName || username, email: email || '', avatar: null, createdAt: now(), updatedAt: now() };
+  DB.users.push(u); persist(); return u;
+}
+const listUsers = () => DB.users.map(safeUser);
+function updateUser(id, patch) {
+  const u = getUserById(id); if (!u) return null;
+  for (const k of ['displayName', 'email', 'role', 'avatar', 'passwordHash']) if (patch[k] !== undefined) u[k] = patch[k];
+  u.updatedAt = now(); persist(); return u;
+}
+function deleteUser(id) {
+  const ix = DB.users.findIndex(x => x.id === id); if (ix < 0) return false;
+  DB.users.splice(ix, 1);
+  const ivIds = new Set(DB.interviews.filter(i => i.userId === id).map(i => i.id));
+  DB.interviews = DB.interviews.filter(i => i.userId !== id);
+  DB.questions = DB.questions.filter(q => !ivIds.has(q.interviewId));
+  DB.suggestions = DB.suggestions.filter(s => !ivIds.has(s.interviewId));
+  delete DB.settings[id];
+  persist(); return true;
+}
+const getSite = () => { if (!DB.site) DB.site = {}; return { logo: DB.site.logo || null }; };
+function saveSite(patch) { DB.site = { ...DB.site, ...patch }; persist(); return getSite(); }
 const getSettings = (uidv) => { if (!DB.settings[uidv]) { DB.settings[uidv] = defaultSettings(); persist(); } return DB.settings[uidv]; };
 function saveSettings(uidv, patch) { DB.settings[uidv] = { ...getSettings(uidv), ...patch }; persist(); return DB.settings[uidv]; }
 const listInterviews = (userId) => DB.interviews.filter(i => i.userId === userId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 const getInterview = (userId, id) => DB.interviews.find(i => i.id === id && i.userId === userId);
 function withCounts(iv) {
   const qs = DB.questions.filter(q => q.interviewId === iv.id);
-  return { ...iv, questionCount: qs.length, answerCount: qs.filter(q => q.answer && q.answer.trim()).length };
+  const owner = iv.userId ? DB.users.find(u => u.id === iv.userId) : null;
+  return { ...iv, questionCount: qs.length, answerCount: qs.filter(q => q.answer && q.answer.trim()).length, ownerAvatar: owner ? (owner.avatar || null) : null, ownerName: owner ? (owner.displayName || owner.username) : null };
 }
 function createInterview(userId, d) {
   const stamp = now();
@@ -184,4 +211,4 @@ function stats(userId) {
   };
 }
 
-module.exports = { initDb, persist, now, findUserByName, getUserById, safeUser, getSettings, saveSettings, listInterviews, getInterview, withCounts, createInterview, updateInterview, deleteInterview, listQuestions, addQuestions, updateQuestion, deleteQuestion, saveAnswer, bankQuestions, getSuggestion, saveSuggestion, stats };
+module.exports = { initDb, persist, now, findUserByName, findUserByLogin, getUserById, safeUser, createUser, listUsers, updateUser, deleteUser, getSite, saveSite, getSettings, saveSettings, listInterviews, getInterview, withCounts, createInterview, updateInterview, deleteInterview, listQuestions, addQuestions, updateQuestion, deleteQuestion, saveAnswer, bankQuestions, getSuggestion, saveSuggestion, stats };

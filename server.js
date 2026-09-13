@@ -12,8 +12,8 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
-app.use(express.json({ limit: '1mb' }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '5mb' }));
+app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 app.use(session({
   name: 'aais.sid',
   secret: process.env.SESSION_SECRET || 'dev-secret-change-me',
@@ -29,7 +29,20 @@ const requireAuth = (req, res, next) => {
   if (!u) return res.status(401).json({ ok: false, error: 'Not authenticated. Please log in.' });
   req.user = u; next();
 };
+const requireAdmin = (req, res, next) => {
+  const u = me(req);
+  if (!u) return res.status(401).json({ ok: false, error: 'Not authenticated. Please log in.' });
+  if (u.role !== 'Administrator') return res.status(403).json({ ok: false, error: 'Administrator access required.' });
+  req.user = u; next();
+};
 const clean = (v, n = 2000) => String(v === undefined || v === null ? '' : v).slice(0, n);
+const isDataUrl = (v) => /^data:image\/(png|jpe?g|gif|webp|svg\+xml);base64,[A-Za-z0-9+/=]+$/i.test(String(v || ''));
+const mkUsername = (email) => {
+  let base = String(email || '').split('@')[0].toLowerCase().replace(/[^a-z0-9._-]/g, '').slice(0, 24) || 'user';
+  let un = base, n = 2;
+  while (db.findUserByLogin(un)) un = base + n++;
+  return un;
+};
 
 /* ---- auth ---- */
 app.post('/api/login', async (req, res) => {
@@ -37,15 +50,81 @@ app.post('/api/login', async (req, res) => {
     await new Promise(r => setTimeout(r, 500)); // visible loading state
     const { username, password } = req.body || {};
     if (!username || !password) return res.status(400).json({ ok: false, error: 'Please enter both username and password.' });
-    const user = db.findUserByName(clean(username, 100));
+    const user = db.findUserByLogin(clean(username, 200));
     if (!user || !(await bcrypt.compare(String(password), user.passwordHash)))
       return res.status(401).json({ ok: false, error: 'Invalid username or password.' });
     req.session.userId = user.id;
     res.json({ ok: true, user: db.safeUser(user) });
   } catch { res.status(500).json({ ok: false, error: 'Login failed. Please try again.' }); }
 });
+app.post('/api/register', async (req, res) => {
+  try {
+    await new Promise(r => setTimeout(r, 650)); // visible "creating account" state
+    const { name, email, password } = req.body || {};
+    const nm = clean(name, 120).trim(), em = String(clean(email, 200)).trim().toLowerCase();
+    if (!nm) return res.status(400).json({ ok: false, error: 'Please enter your full name.' });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) return res.status(400).json({ ok: false, error: 'Please enter a valid email address.' });
+    if (!String(password || '').length) return res.status(400).json({ ok: false, error: 'Please choose a password.' });
+    if (String(password).length < 6) return res.status(400).json({ ok: false, error: 'Password must be at least 6 characters long.' });
+    if (db.findUserByLogin(em)) return res.status(409).json({ ok: false, error: 'An account with this email already exists.' });
+    const username = mkUsername(em);
+    const user = db.createUser({ username, displayName: nm, email: em, passwordHash: await bcrypt.hash(String(password), 10) });
+    res.json({ ok: true, user: db.safeUser(user) });
+  } catch (e) { res.status(500).json({ ok: false, error: 'Unable to create your account. Please try again.' }); }
+});
 app.post('/api/logout', (req, res) => req.session.destroy(() => res.json({ ok: true })));
 app.get('/api/me', (req, res) => { const u = me(req); res.json({ ok: true, user: u ? db.safeUser(u) : null, aiMode: ai.hasOpenAI() ? 'openai' : 'local-smart', aiModel: ai.MODEL }); });
+
+/* ---- site branding (public read, admin write) ---- */
+app.get('/api/site', (req, res) => res.json({ ok: true, site: db.getSite() }));
+app.put('/api/site', requireAdmin, (req, res) => {
+  try {
+    const patch = {};
+    if (req.body.logo !== undefined) {
+      const lg = clean(req.body.logo, 200000);
+      if (lg && !isDataUrl(lg)) return res.status(400).json({ ok: false, error: 'Invalid image format for the logo.' });
+      patch.logo = lg || null;
+    }
+    res.json({ ok: true, site: db.saveSite(patch) });
+  } catch { res.status(500).json({ ok: false, error: 'Unable to save the logo. Please try again.' }); }
+});
+
+/* ---- admin: user management ---- */
+app.get('/api/admin/users', requireAdmin, (req, res) => res.json({ ok: true, users: db.listUsers() }));
+app.put('/api/admin/users/:id', requireAdmin, async (req, res) => {
+  try {
+    const u = db.getUserById(req.params.id);
+    if (!u) return res.status(404).json({ ok: false, error: 'Account not found.' });
+    const patch = {};
+    if (req.body.displayName !== undefined) patch.displayName = clean(req.body.displayName, 120).trim() || u.username;
+    if (req.body.email !== undefined) {
+      const em = String(clean(req.body.email, 200)).trim().toLowerCase();
+      if (em && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) return res.status(400).json({ ok: false, error: 'Invalid email address.' });
+      if (em && em !== u.email && db.findUserByLogin(em)) return res.status(409).json({ ok: false, error: 'Another account already uses this email.' });
+      patch.email = em;
+    }
+    if (req.body.role !== undefined) {
+      if (!['User', 'Administrator'].includes(req.body.role)) return res.status(400).json({ ok: false, error: 'Invalid role.' });
+      if (u.role === 'Administrator' && req.body.role !== 'Administrator' && db.listUsers().filter(x => x.role === 'Administrator').length <= 1)
+        return res.status(400).json({ ok: false, error: 'Cannot demote the only administrator.' });
+      patch.role = req.body.role;
+    }
+    if (req.body.newPassword) {
+      if (String(req.body.newPassword).length < 6) return res.status(400).json({ ok: false, error: 'New password must be at least 6 characters.' });
+      patch.passwordHash = await bcrypt.hash(String(req.body.newPassword), 10);
+    }
+    res.json({ ok: true, user: db.safeUser(db.updateUser(u.id, patch)) });
+  } catch { res.status(500).json({ ok: false, error: 'Unable to update the account. Please try again.' }); }
+});
+app.delete('/api/admin/users/:id', requireAdmin, (req, res) => {
+  const target = db.getUserById(req.params.id);
+  if (!target) return res.status(404).json({ ok: false, error: 'Account not found.' });
+  if (req.params.id === req.user.id) return res.status(400).json({ ok: false, error: 'You cannot delete your own account.' });
+  if (target.role === 'Administrator' && db.listUsers().filter(x => x.role === 'Administrator').length <= 1)
+    return res.status(400).json({ ok: false, error: 'Cannot delete the only administrator account.' });
+  db.deleteUser(target.id);
+  res.json({ ok: true });
+});
 
 /* ---- dashboard ---- */
 app.get('/api/stats', requireAuth, (req, res) => res.json({ ok: true, ...db.stats(req.user.id) }));
@@ -155,9 +234,14 @@ app.get('/api/profile', requireAuth, (req, res) => res.json({ ok: true, user: db
 app.put('/api/profile', requireAuth, async (req, res) => {
   try {
     const u = db.getUserById(req.user.id);
-    const { displayName, email, currentPassword, newPassword } = req.body || {};
+    const { displayName, email, currentPassword, newPassword, avatar } = req.body || {};
     if (displayName !== undefined) u.displayName = clean(displayName, 120) || u.username;
     if (email !== undefined) u.email = clean(email, 200);
+    if (avatar !== undefined) {
+      const av = clean(avatar, 200000);
+      if (av && !isDataUrl(av)) return res.status(400).json({ ok: false, error: 'Invalid image format for the profile picture.' });
+      u.avatar = av || null;
+    }
     if (newPassword) {
       if (!currentPassword || !(await bcrypt.compare(String(currentPassword), u.passwordHash))) return res.status(400).json({ ok: false, error: 'Current password is incorrect.' });
       if (String(newPassword).length < 6) return res.status(400).json({ ok: false, error: 'New password must be at least 6 characters.' });
