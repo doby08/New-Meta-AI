@@ -1,0 +1,80 @@
+PAANO PATATAKBUHIN ANG AI INTERVIEW SYSTEM (Tagalog Guide)
+======================================================
+
+BAKIT HINDI NAG-OOPEN ANG LINK?
+-------------------------------
+Ang http://localhost:3000 ay HINDI website sa internet.
+Ito ay bubukas LANG kapag umaandar na ang server sa PC mo.
+Kung hindi pa naka-"npm start", normal lang na "This site can't be reached"
+ang makita sa Chrome. Kailangan muna paandarin, BAGO buksan ang link.
+
+PINAKAMADALING PARAAN (walang terminal na kailangan):
+-----------------------------------------------------
+1. Buksan ang folder na "METa AI" sa File Explorer.
+2. I-DOUBLE CLICK ang file na:  SIMULAN-DITO.bat
+3. Maghintay hanggang makita mo ang:
+     AI Assistance Interview System running: http://localhost:3000
+4. HUWAG isara ang black window na yan (yan ang server).
+5. Buksan ang Chrome at i-type MANU-MANO sa address bar:
+     http://localhost:3000
+   (huwag i-click mula sa VS Code, i-type mismo sa Chrome)
+6. Login:
+     Username: Dan
+     Password: 10231998
+
+KUNG NAG-ERROR ANG "npm install" O "npm start" SA TERMINAL:
+----------------------------------------------------------
+Karaniwang dahilan at solusyon:
+
+A) "npm is not recognized" o "node is not recognized"
+   -> Walang Node.js. Solusyon:
+   1. Pumunta sa https://nodejs.org
+   2. Pindutin ang LTS (berdeng button), i-install.
+   3. I-RESTART ang PC (o isara/buksan ulit ang VS Code).
+   4. I-double click ulit ang SIMULAN-DITO.bat
+
+B) "enoent Could not read package.json" o "no such file"
+   -> Maling folder ang terminal. Solusyon:
+   1. Sa VS Code: File > Open Folder > piliin ang "METa AI" folder mismo
+      (dapat kita agad ang server.js at package.json).
+   2. O sa terminal, gamitan ng QUOTES dahil may space ang path:
+        cd "C:\Users\Ivy Banua\OneDrive\Desktop\kuya poy\METa AI"
+      Pagkatapos:
+        npm install
+        npm start
+
+C) "npm.ps1 cannot be loaded / running scripts is disabled"
+   -> PowerShell ang problema. Solusyon:
+   1. Huwag gumamit ng PowerShell. Gamitin ang Command Prompt:
+      Sa VS Code terminal, pindutin ang + dropdown > Command Prompt.
+   2. O mas madali: i-double click ang SIMULAN-DITO.bat (hindi na kailangan ng VS Code terminal).
+
+D) "EAI_AGAIN / network / registry" o mabagal na install
+   -> Walang internet o mahina. Solusyon:
+   1. Ikonek sa internet, patayin muna ang VPN kung meron.
+   2. I-double click ang AYUSIN.bat (kusa nitong lilinisin at i-install ulit).
+
+E) "Port 3000 already in use"
+   -> May lumang server na bukas. Solusyon:
+   1. Isara ang lahat ng black window na may "node server.js".
+   2. O i-restart ang PC, pagkatapos SIMULAN-DITO.bat ulit.
+
+F) Nasa OneDrive ang folder (kagaya ng sa iyo)
+   -> Minsan naka-lock ng OneDrive sync. Solusyon:
+   1. Hintaying matapos mag-sync ang OneDrive (berdeng check).
+   2. Kung ayaw pa rin: kopyahin ang buong "METa AI" folder sa
+      C:\METa-AI  (walang space, walang OneDrive), at doon paandarin.
+
+KUNG GUSTO MONG I-SCREENSHOT ANG ERROR:
+----------------------------------------
+1. Sa terminal, i-copy ang PULANG mensahe.
+2. Isend mo dito para masabi ko ang eksaktong ayos.
+3. O i-double click ang CHECK.bat at isend ang lumabas.
+
+CHECKLIST BAGO MAGTANONG ULIT:
+------------------------------
+[ ] Na-install ang Node.js LTS? (check: node -v dapat v18 pataas)
+[ ] Nasa tamang folder? (dapat may server.js at package.json)
+[ ] Nakita ang "running: http://localhost:3000" bago binuksan ang Chrome?
+[ ] Tinype ng mano-mano ang http://localhost:3000 sa Chrome?
+[ ] Sinubukan ang SIMULAN-DITO.bat imbes na manual terminal?

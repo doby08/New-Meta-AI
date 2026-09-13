@@ -1,0 +1,187 @@
+/* Persistent JSON database (file-backed, survives restarts).
+   Tables: users, interviews, questions, suggestions, settings */
+const fs = require('fs');
+const path = require('path');
+const bcrypt = require('bcryptjs');
+
+const DATA_DIR = path.join(__dirname, 'data');
+const DB_FILE = path.join(DATA_DIR, 'db.json');
+let DB = null;
+
+const emptyDb = () => ({ users: [], interviews: [], questions: [], suggestions: [], settings: {}, seq: 1 });
+const now = () => new Date().toISOString();
+const dayOf = (iso) => String(iso || '').slice(0, 10);
+const defaultSettings = () => ({ accent: 'blue', theme: 'light', itemsPerPage: 8, defaultQuestionCount: 20, aiModel: 'gpt-4o-mini', notifications: true, compact: false });
+
+function persist() {
+  const tmp = DB_FILE + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(DB, null, 2));
+  fs.renameSync(tmp, DB_FILE);
+}
+function uid(p) { return p + '_' + (DB.seq++) + '_' + Date.now().toString(36); }
+function daysAgo(n, h = 9) { const d = new Date(); d.setDate(d.getDate() - n); d.setHours(h, 12, 0, 0); return d.toISOString(); }
+
+async function initDb() {
+  try {
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    DB = fs.existsSync(DB_FILE) ? JSON.parse(fs.readFileSync(DB_FILE, 'utf8')) : emptyDb();
+    for (const k of Object.keys(emptyDb())) if (!(k in DB)) DB[k] = emptyDb()[k];
+  } catch { DB = emptyDb(); }
+  let admin = DB.users.find(u => u.username.toLowerCase() === 'dan');
+  if (!admin) {
+    const hash = await bcrypt.hash(process.env.ADMIN_PASSWORD || '10231998', 10);
+    admin = { id: uid('u'), username: 'Dan', passwordHash: hash, role: 'Administrator', displayName: 'Dan', email: '', createdAt: now(), updatedAt: now() };
+    DB.users.push(admin);
+  }
+  if (!DB.settings[admin.id]) DB.settings[admin.id] = defaultSettings();
+  seedSample(admin.id);
+  persist();
+  return admin;
+}
+function seedSample(userId) {
+  if (DB.interviews.length > 0) return;
+  const mk = (title, stakeholders, n, status) => {
+    const iv = { id: uid('i'), userId, title, description: 'Sample record — safe to delete.', stakeholders, interviewee: stakeholders.split(',')[0].trim(), date: dayOf(daysAgo(n)), type: 'Requirements Gathering', status, createdAt: daysAgo(n), updatedAt: daysAgo(Math.max(0, n - 1)) };
+    DB.interviews.push(iv); return iv;
+  };
+  const a = mk('[Sample] Web-Based Enrollment System', 'Students, Registrar, Teachers', 6, 'completed');
+  const b = mk('[Sample] Hospital Management System', 'Doctors, Nurses, Patients', 3, 'in-progress');
+  mk('[Sample] Library Catalog Portal', 'Librarians, Students', 1, 'draft');
+  const qs = [
+    ['Students', 'Process', 'How do you currently enroll in subjects each term, and which steps take the most time?'],
+    ['Students', 'Pain Points', 'What problems have you experienced with enrollment queues, schedules, or requirements?'],
+    ['Registrar', 'Workflow', 'Walk me through how the registrar validates student records and approves enrollment.'],
+    ['Registrar', 'Data', 'Which student records are hardest to keep accurate, and why?'],
+    ['Teachers', 'Requirements', 'What class information (loads, schedules, rosters) must the system show teachers?'],
+    ['Teachers', 'Reporting', 'Which reports do teachers need most after enrollment closes?'],
+    ['Students', 'Experience', 'How should the system notify you about approval status or lacking requirements?'],
+    ['Registrar', 'Improvement', 'If one enrollment step could be automated, which should it be and why?']
+  ];
+  const ans = [
+    'We line up at dawn; encoding subjects takes hours and prospectus checking is manual.',
+    'Long queues, lost evaluation forms, and unclear prerequisites every semester.',
+    'We check grades and clearances folder by folder, then sign the study load manually.',
+    'Transfer credentials and shifting grades — papers arrive late and get misfiled.',
+    'Teachers need teaching loads, room assignments, and official class lists per section.',
+    'Master lists per subject and overload reports for the dean.',
+    'SMS and email alerts would help, plus a tracker showing pending vs approved.',
+    'Automatic prerequisite checking against grades would remove most bottlenecks.'
+  ];
+  qs.forEach((q, i) => DB.questions.push({ id: uid('q'), interviewId: a.id, number: i + 1, text: q[2], stakeholder: q[0], category: q[1], answer: ans[i], answeredAt: daysAgo(5), createdAt: daysAgo(6), updatedAt: daysAgo(5) }));
+  const bq = ['How are patient admissions and triage currently recorded on your shift?', 'What delays happen most during endorsement between nurses and doctors?', 'Which patient information is hardest to retrieve during emergencies?'];
+  bq.forEach((t, i) => DB.questions.push({ id: uid('q'), interviewId: b.id, number: i + 1, text: t, stakeholder: ['Nurses', 'Nurses', 'Doctors'][i], category: 'Process', answer: '', answeredAt: null, createdAt: daysAgo(3), updatedAt: daysAgo(3) }));
+}
+
+const findUserByName = (u) => DB.users.find(x => x.username.toLowerCase() === String(u || '').toLowerCase());
+const getUserById = (id) => DB.users.find(x => x.id === id);
+function safeUser(u) { return u ? { id: u.id, username: u.username, role: u.role, displayName: u.displayName || u.username, email: u.email || '', createdAt: u.createdAt } : null; }
+const getSettings = (uidv) => { if (!DB.settings[uidv]) { DB.settings[uidv] = defaultSettings(); persist(); } return DB.settings[uidv]; };
+function saveSettings(uidv, patch) { DB.settings[uidv] = { ...getSettings(uidv), ...patch }; persist(); return DB.settings[uidv]; }
+const listInterviews = (userId) => DB.interviews.filter(i => i.userId === userId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+const getInterview = (userId, id) => DB.interviews.find(i => i.id === id && i.userId === userId);
+function withCounts(iv) {
+  const qs = DB.questions.filter(q => q.interviewId === iv.id);
+  return { ...iv, questionCount: qs.length, answerCount: qs.filter(q => q.answer && q.answer.trim()).length };
+}
+function createInterview(userId, d) {
+  const stamp = now();
+  const iv = { id: uid('i'), userId, title: d.title, description: d.description || '', stakeholders: d.stakeholders, interviewee: d.interviewee || '', date: d.date || dayOf(stamp), takenAt: stamp, takenTime: new Date(stamp).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' }), completedAt: null, type: d.type || 'General', status: 'draft', createdAt: stamp, updatedAt: stamp };
+  DB.interviews.push(iv); persist(); return withCounts(iv);
+}
+function updateInterview(userId, id, d) {
+  const iv = getInterview(userId, id); if (!iv) return null;
+  for (const k of ['title', 'description', 'stakeholders', 'interviewee', 'date', 'type', 'status']) if (d[k] !== undefined) iv[k] = d[k];
+  iv.updatedAt = now(); persist(); return withCounts(iv);
+}
+function deleteInterview(userId, id) {
+  const ix = DB.interviews.findIndex(i => i.id === id && i.userId === userId); if (ix < 0) return false;
+  DB.interviews.splice(ix, 1);
+  DB.questions = DB.questions.filter(q => q.interviewId !== id);
+  DB.suggestions = DB.suggestions.filter(s => s.interviewId !== id);
+  persist(); return true;
+}
+const listQuestions = (userId, interviewId) => {
+  if (!getInterview(userId, interviewId)) return null;
+  return DB.questions.filter(q => q.interviewId === interviewId).sort((a, b) => a.number - b.number);
+};
+function addQuestions(userId, interviewId, items) {
+  const iv = getInterview(userId, interviewId); if (!iv) return null;
+  const existing = DB.questions.filter(q => q.interviewId === interviewId).length;
+  const rows = items.map((q, i) => ({ id: uid('q'), interviewId, number: existing + i + 1, text: q.text, stakeholder: q.stakeholder || 'General', category: q.category || 'General', answer: '', answeredAt: null, createdAt: now(), updatedAt: now() }));
+  DB.questions.push(...rows);
+  if (iv.status === 'draft') iv.status = 'in-progress';
+  iv.updatedAt = now(); persist(); return rows;
+}
+function updateQuestion(userId, qid, patch) {
+  const q = DB.questions.find(x => x.id === qid); if (!q) return null;
+  if (!getInterview(userId, q.interviewId)) return null;
+  for (const k of ['text', 'stakeholder', 'category']) if (patch[k] !== undefined) q[k] = patch[k];
+  q.updatedAt = now(); persist(); return q;
+}
+function deleteQuestion(userId, qid) {
+  const ix = DB.questions.findIndex(x => x.id === qid); if (ix < 0) return false;
+  if (!getInterview(userId, DB.questions[ix].interviewId)) return false;
+  DB.questions.splice(ix, 1); persist(); return true;
+}
+function saveAnswer(userId, qid, answer) {
+  const q = DB.questions.find(x => x.id === qid); if (!q) return null;
+  const iv = getInterview(userId, q.interviewId); if (!iv) return null;
+  q.answer = String(answer || ''); q.answeredAt = q.answer.trim() ? now() : null; q.updatedAt = now();
+  if (!iv.takenAt) { iv.takenAt = now(); iv.takenTime = new Date(iv.takenAt).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' }); }
+  const qs = DB.questions.filter(x => x.interviewId === iv.id);
+  const anyAns = qs.some(x => x.answer && x.answer.trim());
+  const allAns = qs.length > 0 && qs.every(x => x.answer && x.answer.trim());
+  iv.status = allAns ? 'completed' : (anyAns ? 'in-progress' : iv.status);
+  if (allAns && !iv.completedAt) iv.completedAt = now();
+  if (!allAns) iv.completedAt = null;
+  iv.updatedAt = now(); persist(); return { question: q, interview: withCounts(iv) };
+}
+function bankQuestions(userId, o) {
+  o = o || {};
+  const ids = new Set(DB.interviews.filter(i => i.userId === userId).map(i => i.id));
+  const titles = {}; DB.interviews.forEach(i => titles[i.id] = i.title);
+  const s = String(o.search || '').toLowerCase();
+  return DB.questions.filter(q => ids.has(q.interviewId)
+    && (!o.interviewId || q.interviewId === o.interviewId)
+    && (!o.stakeholder || q.stakeholder === o.stakeholder)
+    && (!s || q.text.toLowerCase().includes(s) || String(q.answer || '').toLowerCase().includes(s)))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .map(q => ({ ...q, interviewTitle: titles[q.interviewId] || '(deleted)' }));
+}
+const getSuggestion = (userId, interviewId) => {
+  if (!getInterview(userId, interviewId)) return undefined;
+  const rows = DB.suggestions.filter(s => s.interviewId === interviewId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return rows[0] || null;
+};
+function saveSuggestion(userId, interviewId, data, source) {
+  if (!getInterview(userId, interviewId)) return null;
+  const row = { id: uid('s'), interviewId, ...data, source, createdAt: now() };
+  DB.suggestions.push(row); persist(); return row;
+}
+function stats(userId) {
+  const ivs = DB.interviews.filter(i => i.userId === userId);
+  const ids = new Set(ivs.map(i => i.id));
+  const qs = DB.questions.filter(q => ids.has(q.interviewId));
+  const sg = DB.suggestions.filter(s => ids.has(s.interviewId));
+  // Insights line-graph data: answered responses per day + answer-word volume per day
+  const wordsByDay = {};
+  qs.forEach(q => {
+    if (!q.answer || !q.answer.trim()) return;
+    const k = dayOf(q.answeredAt || q.updatedAt || q.createdAt);
+    wordsByDay[k] = (wordsByDay[k] || 0) + String(q.answer).trim().split(/\s+/).length;
+  });
+  const labels = [], map = {};
+  for (let n = 13; n >= 0; n--) { const d = new Date(); d.setDate(d.getDate() - n); const k = d.toISOString().slice(0, 10); labels.push(k); map[k] = { date: k, interviews: 0, questions: 0, completed: 0, suggestions: 0 }; }
+  ivs.forEach(i => { const k = dayOf(i.createdAt); if (map[k]) map[k].interviews++; });
+  qs.forEach(q => { const k = dayOf(q.createdAt); if (map[k]) map[k].questions++; });
+  ivs.filter(i => i.status === 'completed').forEach(i => { const k = dayOf(i.updatedAt); if (map[k]) map[k].completed++; });
+  sg.forEach(s => { const k = dayOf(s.createdAt); if (map[k]) map[k].suggestions++; });
+  qs.forEach(q => { if (q.answer && q.answer.trim()) { const k = dayOf(q.answeredAt || q.updatedAt || q.createdAt); if (map[k]) map[k].answers = (map[k].answers || 0) + 1; } });
+  labels.forEach(k => { map[k].words = wordsByDay[k] || 0; if (map[k].answers === undefined) map[k].answers = 0; });
+  return {
+    cards: { totalInterviews: ivs.length, questionsGenerated: qs.length, completedInterviews: ivs.filter(i => i.status === 'completed').length, suggestionsGenerated: sg.length, activeUsers: DB.users.length, answersCollected: qs.filter(q => q.answer && q.answer.trim()).length },
+    series: labels.map(k => map[k])
+  };
+}
+
+module.exports = { initDb, persist, now, findUserByName, getUserById, safeUser, getSettings, saveSettings, listInterviews, getInterview, withCounts, createInterview, updateInterview, deleteInterview, listQuestions, addQuestions, updateQuestion, deleteQuestion, saveAnswer, bankQuestions, getSuggestion, saveSuggestion, stats };

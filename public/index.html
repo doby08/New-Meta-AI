@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Assistance Interview System · Western Philippines University Main Campus</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<link rel="stylesheet" href="/styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%234f46e5'/><text x='50' y='68' font-size='52' text-anchor='middle' fill='white' font-family='Arial' font-weight='bold'>AI</text></svg>">
+</head>
+<body>
+<!-- Print-only university letterhead -->
+<div id="printHead" class="print-only">
+  <div class="ph-row">
+    <div class="ph-logo">AI</div>
+    <div>
+      <b>AI Assistance Interview System</b>
+      <span>Western Philippines University · Main Campus</span>
+      <small id="printMeta"></small>
+    </div>
+  </div>
+  <hr>
+</div>
+<!-- Login screen -->
+<div id="loginScreen" class="login-screen hidden">
+  <div class="login-card">
+    <div class="login-brand"><div class="login-logo">AI</div>
+      <div><h1>AI Assistance<br>Interview System</h1><p>Western Philippines University · Main Campus</p></div>
+    </div>
+    <div id="loginError" class="alert alert-error hidden"></div>
+    <form id="loginForm" autocomplete="off">
+      <label class="field"><span>Username</span>
+        <input id="loginUser" type="text" placeholder="Enter username" autocomplete="username">
+      </label>
+      <label class="field"><span>Password</span>
+        <span class="pw-wrap"><input id="loginPass" type="password" placeholder="Enter password" autocomplete="current-password">
+        <button type="button" id="pwToggle" class="icon-btn" title="Show/Hide password" aria-label="Show or hide password">👁</button></span>
+      </label>
+      <button id="loginBtn" class="btn btn-primary btn-block" type="submit"><span class="btn-label">Sign in</span><span class="spinner hidden"></span></button>
+      <p class="login-hint">Sign in with your administrator account to continue.</p>
+    </form>
+  </div>
+</div>
+
+<!-- App shell -->
+<div id="appShell" class="hidden">
+  <aside id="sidebar" class="sidebar">
+    <div class="side-brand"><div class="side-logo">AI</div><div><b>AI Assistance Interview</b><small>System · WPU Main Campus</small></div></div>
+    <nav id="sideNav" class="side-nav"></nav>
+    <div class="side-foot"><div class="side-user"><div class="avatar" id="sideAvatar">D</div><div><b id="sideUser">Dan</b><small id="sideRole">Administrator</small></div></div></div>
+  </aside>
+  <div class="sidebar-scrim" id="sideScrim"></div>
+  <div class="main-col">
+    <header class="topbar">
+      <button id="menuBtn" class="icon-btn only-mobile" aria-label="Open menu">☰</button>
+      <div class="crumbs"><b id="pageTitle">Home</b><small id="pageSub">Welcome</small></div>
+      <div class="top-actions"><button id="themeBtn" class="icon-btn theme-btn" title="Toggle night / light mode" aria-label="Toggle night or light mode">🌙</button><span id="aiBadge" class="pill">AI</span><button id="logoutBtnTop" class="btn btn-ghost">Logout</button></div>
+    </header>
+    <main id="view" class="content"></main>
+    <footer class="foot">AI Assistance Interview System · Western Philippines University Main Campus · secure session · data persists across restarts</footer>
+  </div>
+</div>
+
+<div id="toasts" class="toasts"></div>
+<div id="modalRoot"></div>
+<script src="/app.js"></script>
+</body>
+</html>
