@@ -188,7 +188,7 @@ async function pDashboard() {
       + '<div class="card"><h3>Quick actions</h3><p class="sub">Jump straight into your workflow.</p><div class="grid g3">'
       + [['➕', 'Create New Interview', 'create'], ['⚡', 'Generate Questions', 'my'], ['📚', 'View Question Bank', 'bank'], ['💡', 'View Results', 'results'], ['🕘', 'View History', 'history'], ['📄', 'View Summary Report', 'report']].map(a => '<button class="btn btn-ghost" data-go="' + a[2] + '" style="padding:16px;font-size:14px"><span style="font-size:20px">' + a[0] + '</span> ' + a[1] + '</button>').join('')
       + '</div></div>'
-      + '<div class="card"><h3>Recent interviews</h3><p class="sub">Your latest saved work.</p>' + (rc.interviews.length ? '<div class="table-wrap"><table><tr><th>Title</th><th>Status</th><th>Q&A</th><th></th></tr>' + rc.interviews.map(i => '<tr><td><b>' + esc(i.title) + '</b><br><small style="color:#64748b">' + esc(i.stakeholders) + '</small></td><td>' + badge(i.status) + '</td><td>' + i.answerCount + '/' + i.questionCount + '</td><td><button class="btn btn-ghost btn-sm" data-open="' + i.id + '">Open</button></td></tr>').join('') + '</table></div>' : '<div class="empty"><div class="big">📝</div><p>No interviews yet. Create your first one to see activity here.</p></div>') + '</div>';
+      + '<div class="card"><h3>Recent interviews</h3><p class="sub">Your latest saved work.</p>' + (rc.interviews.length ? '<div class="table-wrap"><table><tr><th>Title</th><th>Status</th><th>Q&A</th><th></th></tr>' + rc.interviews.map(i => '<tr><td><b>' + esc(i.title) + '</b><br><small style="color:var(--muted)">' + esc(i.stakeholders) + '</small></td><td>' + badge(i.status) + '</td><td>' + i.answerCount + '/' + i.questionCount + '</td><td><button class="btn btn-ghost btn-sm" data-open="' + i.id + '">Open</button></td></tr>').join('') + '</table></div>' : '<div class="empty"><div class="big">📝</div><p>No interviews yet. Create your first one to see activity here.</p></div>') + '</div>';
     $$('#view [data-go]').forEach(b => b.onclick = () => go(b.dataset.go));
     $$('#view [data-open]').forEach(b => b.onclick = () => go('my', b.dataset.open));
     drawChart(st.series);
@@ -253,7 +253,7 @@ async function pMy(openId) {
       const s = $('#q').value.toLowerCase();
       $('#list').innerHTML = myCache.filter(i => (i.title + ' ' + i.stakeholders).toLowerCase().includes(s)).map(i =>
         '<div class="qa-card"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><b style="flex:1;min-width:150px">' + esc(i.title) + '</b>' + badge(i.status) + '</div>'
-        + '<p style="color:#64748b;font-size:13px;margin:8px 0">' + esc(i.stakeholders) + ' · ' + esc(i.date) + ' · ' + i.answerCount + '/' + i.questionCount + ' answered</p>'
+        + '<p style="color:var(--muted);font-size:13px;margin:8px 0">' + esc(i.stakeholders) + ' · ' + esc(i.date) + ' · ' + i.answerCount + '/' + i.questionCount + ' answered</p>'
         + '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-primary btn-sm" data-a="open" data-id="' + i.id + '">Open Q&A</button><button class="btn btn-ghost btn-sm" data-a="edit" data-id="' + i.id + '">Edit</button><button class="btn btn-ghost btn-sm" data-a="results" data-id="' + i.id + '">Results</button><button class="btn btn-ghost btn-sm" data-a="report" data-id="' + i.id + '">Report</button><button class="btn btn-danger btn-sm" data-a="del" data-id="' + i.id + '">Delete</button></div></div>').join('')
         || '<div class="empty">No matches.</div>';
       $$('#list [data-a]').forEach(b => b.onclick = () => myAction(b.dataset.a, b.dataset.id));
@@ -320,9 +320,9 @@ function drawQA() {
     + '<span style="flex:1"></span><button class="btn btn-ghost btn-sm" id="qEdit">Edit interview</button>'
     + '<button class="btn btn-ghost btn-sm" id="qResults">Results</button></div>'
     + '<h3 style="margin:16px 0 2px">' + esc(interview.title) + '</h3>'
-    + '<p style="color:#64748b;font-size:13px;margin:0">' + esc(interview.stakeholders) + '</p>'
+    + '<p style="color:var(--muted);font-size:13px;margin:0">' + esc(interview.stakeholders) + '</p>'
     + '<div class="progress"><i style="width:' + Math.round(done / list.length * 100) + '%"></i></div>'
-    + '<small style="color:#64748b">Question ' + (idx + 1) + ' of ' + list.length + ' · ' + done + ' answered</small>'
+    + '<small style="color:var(--muted)">Question ' + (idx + 1) + ' of ' + list.length + ' · ' + done + ' answered</small>'
     + '<div class="qa-meta"><span class="chip">' + esc(q.stakeholder) + '</span><span class="chip cyan">' + esc(q.category) + '</span></div>'
     + '<p style="font-size:16.5px;font-weight:600;line-height:1.55">' + esc(q.text) + '</p>'
     + '<label class="field"><span>Your answer</span><textarea id="qAns" placeholder="Type the stakeholder’s answer here…">' + esc(q.answer || '') + '</textarea></label>'
@@ -343,6 +343,12 @@ function drawQA() {
       const r = await api('/api/questions/' + q.id + '/answer', { method: 'POST', body: JSON.stringify({ answer: $('#qAns').value }) });
       q.answer = r.question.answer; S.qa.dirty = false; S.qa.interview = r.interview;
       toast('Answers saved successfully.');
+      if (r.interview.status === 'completed') {
+        toast('🎉 Interview completed — analyzing answers for insights…');
+        try { await api('/api/interviews/' + S.qa.id + '/analyze', { method: 'POST' }); } catch (err) { /* insights remain optional if AI is busy */ }
+        go('results', S.qa.id);
+        return;
+      }
       if (S.qa.idx < S.qa.list.length - 1) { S.qa.idx++; }
       drawQA();
     } catch (err) { btnLoading(btn, false); toast(err.message, 'error'); }
@@ -380,7 +386,7 @@ async function pBank() {
         '<tr><td>' + x.number + '</td><td><b>' + esc(x.text) + '</b>' + (x.answer ? '<br><small style="color:#16a34a">✓ answered</small>' : '<br><small style="color:#94a3b8">no answer yet</small>') + '</td><td>' + esc(x.stakeholder) + '</td><td><small>' + esc(x.interviewTitle) + '</small></td>'
         + '<td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" data-e="' + x.id + '">Edit</button> <button class="btn btn-danger btn-sm" data-d="' + x.id + '">Delete</button></td></tr>').join('') + '</table></div>'
         : '<div class="empty"><div class="big">📚</div><p>No questions match your filters.</p></div>';
-      $('#bPages').innerHTML = '<button class="btn btn-ghost btn-sm" id="pPrev">← Prev</button><small style="color:#64748b">Page ' + (page + 1) + ' of ' + pages + ' · ' + rows.length + ' results</small><button class="btn btn-ghost btn-sm" id="pNext">Next →</button>';
+      $('#bPages').innerHTML = '<button class="btn btn-ghost btn-sm" id="pPrev">← Prev</button><small style="color:var(--muted)">Page ' + (page + 1) + ' of ' + pages + ' · ' + rows.length + ' results</small><button class="btn btn-ghost btn-sm" id="pNext">Next →</button>';
       $('#pPrev').onclick = () => { page = Math.max(0, page - 1); draw(); };
       $('#pNext').onclick = () => { page = Math.min(pages - 1, page + 1); draw(); };
       $$('#bList [data-e]').forEach(b => b.onclick = () => editQuestion(b.dataset.e, draw));
@@ -561,7 +567,7 @@ async function pProfile() {
   try {
     const j = await api('/api/profile'); const u = j.user;
     view().innerHTML = '<div class="grid g2"><div class="card"><h3>Profile</h3><p class="sub">Your account information.</p>'
-      + '<div style="display:flex;gap:14px;align-items:center;margin-bottom:16px"><div class="avatar" style="width:56px;height:56px;font-size:22px">' + esc((u.displayName || u.username).slice(0, 1).toUpperCase()) + '</div><div><b style="font-size:17px">' + esc(u.displayName || u.username) + '</b><br><small style="color:#64748b">' + esc(u.role) + ' · @' + esc(u.username) + '</small></div></div>'
+      + '<div style="display:flex;gap:14px;align-items:center;margin-bottom:16px"><div class="avatar" style="width:56px;height:56px;font-size:22px">' + esc((u.displayName || u.username).slice(0, 1).toUpperCase()) + '</div><div><b style="font-size:17px">' + esc(u.displayName || u.username) + '</b><br><small style="color:var(--muted)">' + esc(u.role) + ' · @' + esc(u.username) + '</small></div></div>'
       + '<label class="field"><span>Display name</span><input id="pfName" value="' + esc(u.displayName || '') + '"></label>'
       + '<label class="field"><span>Email</span><input id="pfEmail" value="' + esc(u.email || '') + '" placeholder="you@example.com"></label>'
       + '<button class="btn btn-primary" id="pfSave">Save profile</button></div>'
