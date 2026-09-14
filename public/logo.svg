@@ -1,0 +1,179 @@
+<svg width="500" height="500" viewBox="0 0 500 500"
+     xmlns="http://www.w3.org/2000/svg">
+
+  <!-- Transparent background -->
+
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FFF0A3"/>
+      <stop offset="45%" stop-color="#D9A928"/>
+      <stop offset="100%" stop-color="#8C6415"/>
+    </linearGradient>
+
+    <linearGradient id="navy" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#123D72"/>
+      <stop offset="100%" stop-color="#061A35"/>
+    </linearGradient>
+
+    <linearGradient id="water" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0755B5"/>
+      <stop offset="50%" stop-color="#27B9FF"/>
+      <stop offset="100%" stop-color="#064A9E"/>
+    </linearGradient>
+
+    <clipPath id="inner">
+      <circle cx="250" cy="250" r="175"/>
+    </clipPath>
+  </defs>
+
+  <!-- Outer premium rings -->
+  <circle cx="250" cy="250" r="235"
+          fill="none"
+          stroke="url(#gold)"
+          stroke-width="9"/>
+
+  <circle cx="250" cy="250" r="220"
+          fill="url(#navy)"
+          stroke="#E5B52F"
+          stroke-width="3"/>
+
+  <!-- Inner landscape -->
+  <circle cx="250" cy="250" r="178"
+          fill="#76C8F5"
+          stroke="url(#gold)"
+          stroke-width="5"/>
+
+  <g clip-path="url(#inner)">
+
+    <!-- Sky -->
+    <rect x="70" y="70" width="360" height="180"
+          fill="#1683C7"/>
+
+    <!-- Sun -->
+    <circle cx="325" cy="145" r="35"
+            fill="#FFD447"/>
+
+    <g stroke="#FFD447" stroke-width="7">
+      <line x1="325" y1="92" x2="325" y2="75"/>
+      <line x1="325" y1="198" x2="325" y2="215"/>
+      <line x1="272" y1="145" x2="255" y2="145"/>
+      <line x1="378" y1="145" x2="395" y2="145"/>
+      <line x1="288" y1="108" x2="276" y2="96"/>
+      <line x1="362" y1="182" x2="374" y2="194"/>
+    </g>
+
+    <!-- Mountains -->
+    <path d="M60 285 L145 170 L205 235 L270 145
+             L350 245 L405 185 L450 285 Z"
+          fill="#0B5038"/>
+
+    <path d="M145 170 L205 235 L175 215 Z"
+          fill="#3E9B50"/>
+
+    <path d="M270 145 L350 245 L315 205 Z"
+          fill="#4FA94C"/>
+
+    <path d="M405 185 L450 285 L425 235 Z"
+          fill="#5BAA45"/>
+
+    <!-- Plains -->
+    <rect x="60" y="275" width="380" height="90"
+          fill="#28783D"/>
+
+    <path d="M60 300 Q150 285 250 305 T440 300"
+          fill="none"
+          stroke="#B6D957"
+          stroke-width="7"/>
+
+    <path d="M60 325 Q150 310 250 330 T440 325"
+          fill="none"
+          stroke="#D8E978"
+          stroke-width="6"/>
+
+    <!-- Ocean -->
+    <path d="M50 355
+             Q120 325 190 355
+             T330 355
+             T450 355
+             L450 450 L50 450 Z"
+          fill="url(#water)"/>
+
+    <path d="M50 375
+             Q120 345 190 375
+             T330 375
+             T450 375"
+          fill="none"
+          stroke="#FFFFFF"
+          stroke-width="6"
+          opacity="0.9"/>
+
+    <path d="M50 405
+             Q120 375 190 405
+             T330 405
+             T450 405"
+          fill="none"
+          stroke="#59D7FF"
+          stroke-width="7"/>
+
+    <path d="M50 435
+             Q120 405 190 435
+             T330 435
+             T450 435"
+          fill="none"
+          stroke="#FFFFFF"
+          stroke-width="4"
+          opacity="0.8"/>
+
+  </g>
+
+  <!-- Circular title -->
+  <path id="topArc"
+        d="M 92 250 A 158 158 0 0 1 408 250"
+        fill="none"/>
+
+  <text fill="white"
+        font-family="Arial, Helvetica, sans-serif"
+        font-size="21"
+        font-weight="bold"
+        letter-spacing="1.2">
+    <textPath href="#topArc"
+              startOffset="50%"
+              text-anchor="middle">
+      AI - ASSISTANCE INTERVIEW SYSTEM
+    </textPath>
+  </text>
+
+  <!-- Stars -->
+  <text x="105" y="337"
+        fill="url(#gold)"
+        font-size="28"
+        text-anchor="middle">★</text>
+
+  <text x="395" y="337"
+        fill="url(#gold)"
+        font-size="28"
+        text-anchor="middle">★</text>
+
+  <!-- Decorative lines -->
+  <path d="M125 385 Q155 405 180 410"
+        fill="none"
+        stroke="url(#gold)"
+        stroke-width="4"/>
+
+  <path d="M375 385 Q345 405 320 410"
+        fill="none"
+        stroke="url(#gold)"
+        stroke-width="4"/>
+
+  <!-- Year -->
+  <text x="250" y="422"
+        fill="url(#gold)"
+        font-family="Arial, Helvetica, sans-serif"
+        font-size="32"
+        font-weight="bold"
+        text-anchor="middle"
+        letter-spacing="8">
+    2026
+  </text>
+
+</svg>

@@ -151,11 +151,23 @@ function renderNav() {
   $('#navLogout').onclick = askLogout;
 }
 function applySiteLogo() {
-  const logo = (S.site && S.site.logo) || '';
-  const set = (el) => { if (el) el.innerHTML = logo ? '<img src="' + esc(logo) + '" alt="logo">' : 'AI'; };
-  set($('#loginLogo')); set($('#sideLogo')); set($('#printLogo'));
+  // Use custom logo if set, otherwise default to the SVG logo file
+  const customLogo = (S.site && S.site.logo) || '';
+  const logoSrc = customLogo ? customLogo : '/logo.svg';
+  const set = (el, fallbackText) => {
+    if (!el) return;
+    if (customLogo) {
+      el.innerHTML = '<img src="' + esc(customLogo) + '" alt="logo">';
+    } else {
+      // Use the SVG logo file as default
+      el.innerHTML = '<img src="' + esc(logoSrc) + '" alt="logo">';
+    }
+  };
+  set($('#loginLogo'));
+  set($('#sideLogo'));
+  set($('#printLogo'));
   const fav = document.querySelector("link[rel='icon']");
-  if (fav) fav.href = logo || 'data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 100 100\'><rect width=\'100\' height=\'100\' rx=\'22\' fill=\'%234f46e5\'/><text x=\'50\' y=\'68\' font-size=\'52\' text-anchor=\'middle\' fill=\'white\' font-family=\'Arial\' font-weight=\'bold\'>AI</text></svg>';
+  if (fav) fav.href = customLogo || 'data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 100 100\'><rect width=\'100\' height=\'100\' rx=\'22\' fill=\'%234f46e5\'/><text x=\'50\' y=\'68\' font-size=\'52\' text-anchor=\'middle\' fill=\'white\' font-family=\'Arial\' font-weight=\'bold\'>AI</text></svg>';
 }
 function destroyCharts() { S.charts.forEach(c => { try { c.destroy(); } catch {} }); S.charts = []; if (S.sliderT) { clearInterval(S.sliderT); S.sliderT = null; } }
 function go(route, param) {
