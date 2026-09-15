@@ -36,8 +36,8 @@ Premium SaaS-style stakeholder interview platform with AI question generation, a
 - Create Interview (any title + stakeholders, up to 50 AI questions)
 - Q&A walkthrough with Previous / Save / Next, progress bar, jump-to
 - Results & Suggestions (AI analysis grounded in real answers)
-- History table with search, status filter, view/edit/delete + confirm
-- Summary Report with statistics, Q&A recap, edit/delete/back/print
+- History table with search, status filter, view/print only for regular users (edit/delete for administrators only)
+- Summary Report with statistics, Q&A recap, view/print only for regular users (edit/delete for administrators only)
 - Questions Bank with search, interview + stakeholder filters, pagination
 - Profile (display name, email, password change with show/hide)
 - Settings (accent theme, pagination, defaults, notifications, AI model)

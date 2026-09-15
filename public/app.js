@@ -379,33 +379,46 @@ function pCreate() {
     } catch (err) { btnLoading(btn, false); toast(err.message, 'error'); }
   };
 }
-/* ---------- my interviews list ---------- */
+/* ---------- my interviews list (view & print only for regular users; edit/delete for admin) ---------- */
 let myCache = [];
 async function pMy(openId) {
   view().innerHTML = skel(3);
   try {
     myCache = (await api('/api/interviews')).interviews;
+    const canEditDelete = isAdmin();
     if (openId) return pAnswer(openId);
     if (!myCache.length) { view().innerHTML = '<div class="card"><div class="empty"><div class="big">🎙</div><h3>No interviews yet</h3><p>Create your first interview to start generating AI questions.</p><button class="btn btn-primary" id="eCreate">Create interview</button></div></div>'; $('#eCreate').onclick = () => go('create'); return; }
-    view().innerHTML = '<div class="card"><h3>My interviews</h3><p class="sub">Open an interview to answer questions or generate more.</p><div class="toolbar"><input id="q" placeholder="Search interviews…"></div><div id="list" class="grid g2"></div></div>';
+    view().innerHTML = '<div class="card"><h3>My interviews</h3><p class="sub">' + (canEditDelete ? 'Open an interview to answer questions or manage them.' : 'Open an interview to answer questions. Edit and delete are restricted to administrators.') + '</p><div class="toolbar"><input id="q" placeholder="Search interviews…"></div><div id="list" class="grid g2"></div></div>';
     const draw = () => {
       const s = $('#q').value.toLowerCase();
-      $('#list').innerHTML = myCache.filter(i => (i.title + ' ' + i.stakeholders).toLowerCase().includes(s)).map(i =>
-        '<div class="qa-card"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><b style="flex:1;min-width:150px">' + esc(i.title) + '</b>' + badge(i.status) + '</div>'
-        + '<p style="color:var(--muted);font-size:13px;margin:8px 0">' + esc(i.stakeholders) + ' · ' + esc(i.date) + ' · ' + i.answerCount + '/' + i.questionCount + ' answered</p>'
-        + '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-primary btn-sm" data-a="open" data-id="' + i.id + '">Open Q&A</button><button class="btn btn-ghost btn-sm" data-a="edit" data-id="' + i.id + '">Edit</button><button class="btn btn-ghost btn-sm" data-a="results" data-id="' + i.id + '">Results</button><button class="btn btn-ghost btn-sm" data-a="report" data-id="' + i.id + '">Report</button><button class="btn btn-danger btn-sm" data-a="del" data-id="' + i.id + '">Delete</button></div></div>').join('')
-        || '<div class="empty">No matches.</div>';
-      $$('#list [data-a]').forEach(b => b.onclick = () => myAction(b.dataset.a, b.dataset.id));
+      const item = (i) => {
+        let html = '<div class="qa-card"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><b style="flex:1;min-width:150px">' + esc(i.title) + '</b>' + badge(i.status) + '</div>'
+          + '<p style="color:var(--muted);font-size:13px;margin:8px 0">' + esc(i.stakeholders) + ' · ' + esc(i.date) + ' · ' + i.answerCount + '/' + i.questionCount + ' answered</p>'
+          + '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-primary btn-sm" data-a="open" data-id="' + i.id + '">Open Q&A</button>'
+          + '<button class="btn btn-ghost btn-sm" data-a="results" data-id="' + i.id + '">Results</button>'
+          + '<button class="btn btn-ghost btn-sm" data-a="report" data-id="' + i.id + '">Report</button>'
+          + '<button class="btn btn-ghost btn-sm" data-a="print" data-id="' + i.id + '">🖨 Print</button>';
+        if (canEditDelete) {
+          html += '<button class="btn btn-ghost btn-sm" data-a="edit" data-id="' + i.id + '">Edit</button>';
+          html += '<button class="btn btn-danger btn-sm" data-a="del" data-id="' + i.id + '">Delete</button>';
+        }
+        html += '</div></div>';
+        return html;
+      };
+      $('#list').innerHTML = myCache.filter(i => (i.title + ' ' + i.stakeholders).toLowerCase().includes(s)).map(item).join('') || '<div class="empty">No matches.</div>';
+      $$('#list [data-a]').forEach(b => b.onclick = () => myAction(b.dataset.a, b.dataset.id, canEditDelete));
     };
     $('#q').oninput = draw; draw();
   } catch (e) { view().innerHTML = '<div class="alert alert-error">' + esc(e.message) + '</div>'; }
 }
-async function myAction(a, id) {
+async function myAction(a, id, canEditDelete) {
   if (a === 'open') go('my', id);
   else if (a === 'results') go('results', id);
   else if (a === 'report') go('report', id);
-  else if (a === 'edit') editInterview(id, () => pMy());
-  else if (a === 'del') confirmDlg('Delete interview?', 'Are you sure you want to delete this interview? This removes its questions, answers and suggestions.', 'Delete', async () => { await api('/api/interviews/' + id, { method: 'DELETE' }); toast('Interview deleted successfully.'); pMy(); });
+  else if (a === 'print') { pReport(id); setTimeout(() => doPrint('My Interviews — ' + (myCache.find(x => x.id === id)?.title || '')), 450); }
+  else if (a === 'edit' && canEditDelete) editInterview(id, () => pMy());
+  else if (a === 'del' && canEditDelete) confirmDlg('Delete interview?', 'Are you sure you want to delete this interview? This removes its questions, answers and suggestions.', 'Delete', async () => { await api('/api/interviews/' + id, { method: 'DELETE' }); toast('Interview deleted successfully.'); pMy(); });
+  else if (!canEditDelete) toast('Edit and delete are restricted to administrators.', 'warning');
 }
 /* ---------- edit interview modal (shared) ---------- */
 async function editInterview(id, after) {
@@ -634,25 +647,37 @@ function drawInsightChart(series, qa) {
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: tick, usePointStyle: true } }, tooltip: { mode: 'index', intersect: false } }, interaction: { mode: 'index', intersect: false }, scales: { x: { grid: { color: grid }, ticks: { color: tick } }, y: { beginAtZero: true, ticks: { precision: 0, color: tick }, grid: { color: grid } } } } });
   S.charts.push(ch);
 }
-/* ---------- history ---------- */
+/* ---------- history (view & print only for regular users; edit/delete for admin) ---------- */
 async function pHistory() {
   view().innerHTML = skel(3);
   try {
     const all = (await api('/api/interviews')).interviews;
-    view().innerHTML = '<div class="card"><h3>Interview history</h3><p class="sub">Every saved interview with view, edit and delete actions.</p>'
+    const canEditDelete = isAdmin();
+    view().innerHTML = '<div class="card"><h3>Interview history</h3><p class="sub">' + (canEditDelete ? 'Every saved interview with view, edit and delete actions.' : 'All saved interviews — view and print only. Edit and delete are restricted to administrators.') + '</p>'
       + '<div class="toolbar"><input id="hSearch" placeholder="Search title, stakeholders…"><select id="hStatus"><option value="">All statuses</option><option>draft</option><option>in-progress</option><option>completed</option></select></div>'
       + '<div id="hList"></div></div>';
     const draw = async () => {
       const j = await api('/api/interviews?search=' + encodeURIComponent($('#hSearch').value) + '&status=' + $('#hStatus').value);
+      const actions = (i) => {
+        let html = '<button class="btn btn-ghost btn-sm" data-a="view" data-id="' + i.id + '">View</button> ';
+        html += '<button class="btn btn-ghost btn-sm" data-a="print" data-id="' + i.id + '">🖨 Print</button>';
+        if (canEditDelete) {
+          html += ' <button class="btn btn-ghost btn-sm" data-a="edit" data-id="' + i.id + '">Edit</button> ';
+          html += '<button class="btn btn-danger btn-sm" data-a="del" data-id="' + i.id + '">Delete</button>';
+        }
+        return html;
+      };
       $('#hList').innerHTML = j.interviews.length ? '<div class="table-wrap"><table><tr><th>Title</th><th>Stakeholders</th><th>Date</th><th>Status</th><th>Q&A</th><th>Actions</th></tr>' + j.interviews.map(i =>
         '<tr><td><b>' + esc(i.title) + '</b></td><td><small>' + esc(i.stakeholders) + '</small></td><td>' + esc(i.date) + '</td><td>' + badge(i.status) + '</td><td>' + i.answerCount + '/' + i.questionCount + '</td>'
-        + '<td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" data-a="view" data-id="' + i.id + '">View</button> <button class="btn btn-ghost btn-sm" data-a="edit" data-id="' + i.id + '">Edit</button> <button class="btn btn-danger btn-sm" data-a="del" data-id="' + i.id + '">Delete</button></td></tr>').join('') + '</table></div>'
+        + '<td style="white-space:nowrap">' + actions(i) + '</td></tr>').join('') + '</table></div>'
         : '<div class="empty"><div class="big">🕘</div><p>No interviews found. History is loading from the database — try clearing filters.</p></div>';
       $$('#hList [data-a]').forEach(b => b.onclick = () => {
         const id = b.dataset.id, a = b.dataset.a;
         if (a === 'view') go('report', id);
-        else if (a === 'edit') editInterview(id, () => pHistory());
-        else confirmDlg('Delete interview?', 'Are you sure you want to delete this interview?', 'Delete', async () => { await api('/api/interviews/' + id, { method: 'DELETE' }); toast('Interview deleted successfully.'); pHistory(); });
+        else if (a === 'print') { pReport(id); setTimeout(() => doPrint('History — ' + (all.find(x => x.id === id)?.title || '')), 450); }
+        else if (a === 'edit' && canEditDelete) editInterview(id, () => pHistory());
+        else if (a === 'del' && canEditDelete) confirmDlg('Delete interview?', 'Are you sure you want to delete this interview?', 'Delete', async () => { await api('/api/interviews/' + id, { method: 'DELETE' }); toast('Interview deleted successfully.'); pHistory(); });
+        else if (!canEditDelete) toast('Edit and delete are restricted to administrators.', 'warning');
       });
     };
     let t; $('#hSearch').oninput = () => { clearTimeout(t); t = setTimeout(draw, 300); };
@@ -677,16 +702,17 @@ async function pReport(selId, scope) {
       + '<button class="btn btn-ghost btn-sm" id="sBack">← Back</button>'
       + '<select id="sSel" style="flex:1;min-width:200px;border:1.5px solid var(--line);border-radius:10px;padding:9px 12px;background:var(--card);color:var(--ink)">' + all.map(i => '<option value="' + i.id + '"' + (i.id === id ? ' selected' : '') + '>' + esc((S.scope === 'all' && i.ownerName ? '[' + i.ownerName + '] ' : '') + i.title) + '</option>').join('') + '</select>'
       + (isAdmin() ? '<select id="sScope" style="border:1.5px solid var(--line);border-radius:10px;padding:9px 12px;background:var(--card);color:var(--ink)"><option value="mine"' + (S.scope === 'mine' ? ' selected' : '') + '>My interviews</option><option value="all"' + (S.scope === 'all' ? ' selected' : '') + '>All accounts</option></select>' : '')
-      + '<button class="btn btn-ghost btn-sm" id="sEdit">Edit</button><button class="btn btn-danger btn-sm" id="sDel">Delete</button>'
+      + (isAdmin() ? '<button class="btn btn-ghost btn-sm" id="sEdit">Edit</button><button class="btn btn-danger btn-sm" id="sDel">Delete</button>' : '')
       + '<button class="btn btn-primary btn-sm" id="sGen">' + (sg ? 'Regenerate report' : 'Generate report') + '</button>'
       + '<button class="btn btn-ghost btn-sm" id="sPrint">🖨 Print / Export</button></div>'
       + '<p class="sub" style="margin:10px 0 0">' + (isAdmin() && S.scope === 'all' ? '👑 Administrator view — you can open, delete or reprint every account’s interview. Their answers also feed the whole analysis.' : '📌 Each finished interview below is a summary card — name, date & time auto-detected by AI. “Print / Export” prints the detail + all cards.') + '</p></div>'
+      + (isAdmin() ? '' : '<p class="sub" style="margin-top:8px;color:var(--muted);font-size:13px">👁 View & print only — edit and delete are restricted to administrators.</p>')
       + '<h3 style="margin:20px 0 10px">🗂 Completed interview cards</h3><div class="grid g3" id="sumCards"></div><div id="sBody" style="margin-top:18px"></div>';
     $('#sBack').onclick = () => go('history');
     $('#sSel').onchange = (e) => pReport(e.target.value);
     const sc = $('#sScope'); if (sc) sc.onchange = (e) => pReport(null, e.target.value);
-    $('#sEdit').onclick = () => editInterview(id, () => pReport(id));
-    $('#sDel').onclick = () => confirmDlg('Delete interview?', 'Are you sure you want to delete this interview?', 'Delete', async () => { await api('/api/interviews/' + id, { method: 'DELETE' }); toast('Interview deleted successfully.'); go('history'); });
+    $('#sEdit').onclick = () => { if (isAdmin()) editInterview(id, () => pReport(id)); else toast('Edit is restricted to administrators.', 'warning'); };
+    $('#sDel').onclick = () => { if (isAdmin()) confirmDlg('Delete interview?', 'Are you sure you want to delete this interview?', 'Delete', async () => { await api('/api/interviews/' + id, { method: 'DELETE' }); toast('Interview deleted successfully.'); go('history'); }); else toast('Delete is restricted to administrators.', 'warning'); };
     $('#sPrint').onclick = () => doPrint('Summary report — ' + iv.title);
     $('#sGen').onclick = async (e) => {
       const btn = e.currentTarget; btnLoading(btn, true, 'Generating summary report…');
