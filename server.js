@@ -144,7 +144,7 @@ app.post('/api/interviews', requireAuth, (req, res) => {
   const { title, stakeholders } = req.body || {};
   if (!clean(title, 300).trim()) return res.status(400).json({ ok: false, error: 'Please complete all required fields: interview title is required.' });
   if (!clean(stakeholders, 1000).trim()) return res.status(400).json({ ok: false, error: 'Please complete all required fields: stakeholders are required.' });
-  res.json({ ok: true, interview: db.createInterview(req.user.id, { title: clean(title, 300).trim(), description: clean(req.body.description, 4000), stakeholders: clean(stakeholders, 1000).trim(), interviewee: clean(req.body.interviewee, 300), date: clean(req.body.date, 20) || new Date().toISOString().slice(0, 10), type: clean(req.body.type, 100) || 'General' }) });
+  res.json({ ok: true, interview: db.createInterview(req.user.id, { title: clean(title, 300).trim(), description: clean(req.body.description, 4000), stakeholders: clean(stakeholders, 1000).trim(), interviewee: clean(req.body.interviewee, 300), date: clean(req.body.date, 20) || new Date().toISOString().slice(0, 10), type: clean(req.body.type, 100) || 'General', interviewMethod: clean(req.body.interviewMethod, 50) || 'Semi-Structured', interviewFormat: clean(req.body.interviewFormat, 50) || 'Individual Interview' }) });
 });
 app.get('/api/interviews/:id', requireAuth, (req, res) => {
   const iv = db.getInterview(scopeUid(req), req.params.id);
@@ -160,6 +160,8 @@ app.put('/api/interviews/:id', requireAuth, (req, res) => {
   if (b.interviewee !== undefined) patch.interviewee = clean(b.interviewee, 300);
   if (b.date !== undefined) patch.date = clean(b.date, 20);
   if (b.type !== undefined) patch.type = clean(b.type, 100);
+  if (b.interviewMethod !== undefined) patch.interviewMethod = clean(b.interviewMethod, 50);
+  if (b.interviewFormat !== undefined) patch.interviewFormat = clean(b.interviewFormat, 50);
   if (b.status !== undefined && ['draft', 'in-progress', 'completed'].includes(b.status)) patch.status = b.status;
   if (patch.title !== undefined && !patch.title.trim()) return res.status(400).json({ ok: false, error: 'Interview title cannot be empty.' });
   const iv = db.updateInterview(req.user.id, req.params.id, patch);

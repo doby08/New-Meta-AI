@@ -112,12 +112,12 @@ function withCounts(iv) {
 }
 function createInterview(userId, d) {
   const stamp = now();
-  const iv = { id: uid('i'), userId, title: d.title, description: d.description || '', stakeholders: d.stakeholders, interviewee: d.interviewee || '', date: d.date || dayOf(stamp), takenAt: stamp, takenTime: new Date(stamp).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' }), completedAt: null, type: d.type || 'General', status: 'draft', createdAt: stamp, updatedAt: stamp };
+  const iv = { id: uid('i'), userId, title: d.title, description: d.description || '', stakeholders: d.stakeholders, interviewee: d.interviewee || '', date: d.date || dayOf(stamp), takenAt: stamp, takenTime: new Date(stamp).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' }), completedAt: null, type: d.type || 'General', interviewMethod: d.interviewMethod || 'Semi-Structured', interviewFormat: d.interviewFormat || 'Individual Interview', status: 'draft', createdAt: stamp, updatedAt: stamp };
   DB.interviews.push(iv); persist(); return withCounts(iv);
 }
 function updateInterview(userId, id, d) {
   const iv = getInterview(userId, id); if (!iv) return null;
-  for (const k of ['title', 'description', 'stakeholders', 'interviewee', 'date', 'type', 'status']) if (d[k] !== undefined) iv[k] = d[k];
+  for (const k of ['title', 'description', 'stakeholders', 'interviewee', 'date', 'type', 'interviewMethod', 'interviewFormat', 'status']) if (d[k] !== undefined) iv[k] = d[k];
   iv.updatedAt = now(); persist(); return withCounts(iv);
 }
 function deleteInterview(userId, id) {

@@ -327,7 +327,7 @@ async function pDashboard() {
       + '<div class="card"><h3>Quick actions</h3><p class="sub">Jump straight into your workflow.</p><div class="grid g3">'
       + [['➕', 'Create New Interview', 'create'], ['⚡', 'Generate Questions', 'my'], ['📚', 'View Question Bank', 'bank'], ['💡', 'View Results', 'results'], ['🕘', 'View History', 'history'], ['📄', 'View Summary Report', 'report']].map(a => '<button class="btn btn-ghost" data-go="' + a[2] + '" style="padding:16px;font-size:14px"><span style="font-size:20px">' + a[0] + '</span> ' + a[1] + '</button>').join('')
       + '</div></div>'
-      + '<div class="card"><h3>Recent interviews</h3><p class="sub">Your latest saved work.</p>' + (rc.interviews.length ? '<div class="table-wrap"><table><tr><th>Title</th><th>Status</th><th>Q&A</th><th></th></tr>' + rc.interviews.map(i => '<tr><td><b>' + esc(i.title) + '</b><br><small style="color:var(--muted)">' + esc(i.stakeholders) + '</small></td><td>' + badge(i.status) + '</td><td>' + i.answerCount + '/' + i.questionCount + '</td><td><button class="btn btn-ghost btn-sm" data-open="' + i.id + '">Open</button></td></tr>').join('') + '</table></div>' : '<div class="empty"><div class="big">📝</div><p>No interviews yet. Create your first one to see activity here.</p></div>') + '</div>';
+      + '<div class="card"><h3>Recent interviews</h3><p class="sub">Your latest saved work.</p>' + (rc.interviews.length ? '<div class="table-wrap"><table><tr><th>Title</th><th>Method</th><th>Format</th><th>Status</th><th>Q&A</th><th></th></tr>' + rc.interviews.map(i => '<tr><td><b>' + esc(i.title) + '</b><br><small style="color:var(--muted)">' + esc(i.stakeholders) + '</small></td><td>' + esc(i.interviewMethod || '—') + '</td><td>' + esc(i.interviewFormat || '—') + '</td><td>' + badge(i.status) + '</td><td>' + i.answerCount + '/' + i.questionCount + '</td><td><button class="btn btn-ghost btn-sm" data-open="' + i.id + '">Open</button></td></tr>').join('') + '</table></div>' : '<div class="empty"><div class="big">📝</div><p>No interviews yet. Create your first one to see activity here.</p></div>') + '</div>';
     $$('#view [data-go]').forEach(b => b.onclick = () => go(b.dataset.go));
     $$('#view [data-open]').forEach(b => b.onclick = () => go('my', b.dataset.open));
     drawChart(st.series);
@@ -357,6 +357,8 @@ function pCreate() {
   view().innerHTML = '<div class="card"><h3>New interview</h3><p class="sub">Enter any project title and stakeholders — the AI adapts to whatever you type.</p>'
     + '<div class="grid g2"><label class="field"><span>Interview title *</span><input id="fTitle" placeholder="e.g. Web-Based Enrollment System"></label>'
     + '<label class="field"><span>Interview type</span><select id="fType"><option>Requirements Gathering</option><option>Feedback Review</option><option>Problem Discovery</option><option>User Research</option><option>System Evaluation</option><option>General</option></select></label></div>'
+    + '<div class="grid g2"><label class="field"><span>Interview Method *</span><select id="fMethod"><option>Structured</option><option>Semi-Structured</option><option>Unstructured</option></select></label>'
+    + '<label class="field"><span>Interview Format *</span><select id="fFormat"><option>Individual Interview</option><option>Group Interview</option></select></label></div>'
     + '<label class="field"><span>Description</span><textarea id="fDesc" style="min-height:80px" placeholder="Purpose and background…"></textarea></label>'
     + '<label class="field"><span>Stakeholders *</span><input id="fSh" placeholder="e.g. Students, Registrar, Teachers, IT Staff"></label>'
     + '<div class="grid g2"><label class="field"><span>Interviewee</span><input id="fWho" placeholder="Person interviewed (optional)"></label>'
@@ -370,7 +372,7 @@ function pCreate() {
     if (!title || !sh) { toast('Please complete all required fields.', 'error'); return; }
     const btn = e.currentTarget; btnLoading(btn, true, 'Saving interview…');
     try {
-      const j = await api('/api/interviews', { method: 'POST', body: JSON.stringify({ title, description: $('#fDesc').value, stakeholders: sh, interviewee: $('#fWho').value, date: $('#fDate').value, type: $('#fType').value }) });
+      const j = await api('/api/interviews', { method: 'POST', body: JSON.stringify({ title, description: $('#fDesc').value, stakeholders: sh, interviewee: $('#fWho').value, date: $('#fDate').value, type: $('#fType').value, interviewMethod: $('#fMethod').value, interviewFormat: $('#fFormat').value }) });
       toast('Interview created successfully.');
       btnLoading(btn, true, 'Generating questions…');
       const g = await api('/api/interviews/' + j.interview.id + '/generate', { method: 'POST', body: JSON.stringify({ count: Math.min(50, Math.max(1, parseInt($('#fCount').value) || 20)) }) });
@@ -393,7 +395,7 @@ async function pMy(openId) {
       const s = $('#q').value.toLowerCase();
       const item = (i) => {
         let html = '<div class="qa-card"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><b style="flex:1;min-width:150px">' + esc(i.title) + '</b>' + badge(i.status) + '</div>'
-          + '<p style="color:var(--muted);font-size:13px;margin:8px 0">' + esc(i.stakeholders) + ' · ' + esc(i.date) + ' · ' + i.answerCount + '/' + i.questionCount + ' answered</p>'
+          + '<p style="color:var(--muted);font-size:13px;margin:8px 0">' + esc(i.stakeholders) + ' · ' + esc(i.date) + ' · ' + esc(i.interviewMethod || '—') + ' · ' + esc(i.interviewFormat || '—') + ' · ' + i.answerCount + '/' + i.questionCount + ' answered</p>'
           + '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-primary btn-sm" data-a="open" data-id="' + i.id + '">Open Q&A</button>'
           + '<button class="btn btn-ghost btn-sm" data-a="results" data-id="' + i.id + '">Results</button>'
           + '<button class="btn btn-ghost btn-sm" data-a="report" data-id="' + i.id + '">Report</button>'
@@ -428,16 +430,22 @@ async function editInterview(id, after) {
       + '<label class="field"><span>Title</span><input id="mTitle" value="' + esc(iv.title) + '"></label>'
       + '<label class="field"><span>Stakeholders</span><input id="mSh" value="' + esc(iv.stakeholders) + '"></label>'
       + '<label class="field"><span>Description</span><textarea id="mDesc">' + esc(iv.description || '') + '</textarea></label>'
+      + '<div class="grid g2"><label class="field"><span>Interview Method</span><select id="mMethod"><option>Structured</option><option>Semi-Structured</option><option>Unstructured</option></select></label>'
+      + '<label class="field"><span>Interview Format</span><select id="mFormat"><option>Individual Interview</option><option>Group Interview</option></select></label></div>'
       + '<div class="grid g2"><label class="field"><span>Interviewee</span><input id="mWho" value="' + esc(iv.interviewee || '') + '"></label>'
       + '<label class="field"><span>Date</span><input id="mDate" type="date" value="' + esc(iv.date || '') + '"></label></div>'
-      + '<label class="field"><span>Status</span><select id="mStatus">' + ['draft', 'in-progress', 'completed'].map(s => '<option' + (iv.status === s ? ' selected' : '') + '>' + s + '</option>').join('') + '</select></label>'
+      + '<div class="grid g2"><label class="field"><span>Interview type</span><select id="mType"><option>Requirements Gathering</option><option>Feedback Review</option><option>Problem Discovery</option><option>User Research</option><option>System Evaluation</option><option>General</option></select></label>'
+      + '<label class="field"><span>Status</span><select id="mStatus">' + ['draft', 'in-progress', 'completed'].map(s => '<option' + (iv.status === s ? ' selected' : '') + '>' + s + '</option>').join('') + '</select></label></div>'
       + '<div class="modal-actions"><button class="btn btn-ghost" id="mCancel">Back</button><button class="btn btn-primary" id="mOk">Save changes</button></div>', true);
+    $('#mMethod').value = iv.interviewMethod || 'Semi-Structured';
+    $('#mFormat').value = iv.interviewFormat || 'Individual Interview';
+    $('#mType').value = iv.type || 'General';
     $('#mCancel').onclick = closeModal;
     $('#mOk').onclick = async (e) => {
       const btn = e.target; btnLoading(btn, true, 'Saving…');
       try {
-        await api('/api/interviews/' + id, { method: 'PUT', body: JSON.stringify({ title: $('#mTitle').value, stakeholders: $('#mSh').value, description: $('#mDesc').value, interviewee: $('#mWho').value, date: $('#mDate').value, status: $('#mStatus').value }) });
-        closeModal(); toast('Report updated successfully.'); if (after) after();
+        await api('/api/interviews/' + id, { method: 'PUT', body: JSON.stringify({ title: $('#mTitle').value, stakeholders: $('#mSh').value, description: $('#mDesc').value, interviewee: $('#mWho').value, date: $('#mDate').value, type: $('#mType').value, interviewMethod: $('#mMethod').value, interviewFormat: $('#mFormat').value, status: $('#mStatus').value }) });
+        closeModal(); toast('Interview updated successfully.'); if (after) after();
       } catch (err) { btnLoading(btn, false); toast(err.message, 'error'); }
     };
   } catch (e) { toast(e.message, 'error'); }
@@ -667,8 +675,8 @@ async function pHistory() {
         }
         return html;
       };
-      $('#hList').innerHTML = j.interviews.length ? '<div class="table-wrap"><table><tr><th>Title</th><th>Stakeholders</th><th>Date</th><th>Status</th><th>Q&A</th><th>Actions</th></tr>' + j.interviews.map(i =>
-        '<tr><td><b>' + esc(i.title) + '</b></td><td><small>' + esc(i.stakeholders) + '</small></td><td>' + esc(i.date) + '</td><td>' + badge(i.status) + '</td><td>' + i.answerCount + '/' + i.questionCount + '</td>'
+      $('#hList').innerHTML = j.interviews.length ? '<div class="table-wrap"><table><tr><th>Title</th><th>Method</th><th>Format</th><th>Stakeholders</th><th>Date</th><th>Status</th><th>Q&A</th><th>Actions</th></tr>' + j.interviews.map(i =>
+        '<tr><td><b>' + esc(i.title) + '</b></td><td>' + esc(i.interviewMethod || '—') + '</td><td>' + esc(i.interviewFormat || '—') + '</td><td><small>' + esc(i.stakeholders) + '</small></td><td>' + esc(i.date) + '</td><td>' + badge(i.status) + '</td><td>' + i.answerCount + '/' + i.questionCount + '</td>'
         + '<td style="white-space:nowrap">' + actions(i) + '</td></tr>').join('') + '</table></div>'
         : '<div class="empty"><div class="big">🕘</div><p>No interviews found. History is loading from the database — try clearing filters.</p></div>';
       $$('#hList [data-a]').forEach(b => b.onclick = () => {
@@ -728,6 +736,8 @@ async function pReport(selId, scope) {
         + '<div class="row"><small>📅 Date</small><span>' + esc(c.date || '—') + '</span></div>'
         + '<div class="row"><small>⏰ Time</small><span>' + esc(c.takenTime || autoTime(c)) + ' (auto-detected)</span></div>'
         + '<div class="row"><small>👥 Stakeholders</small><span>' + esc(c.stakeholders) + '</span></div>'
+        + '<div class="row"><small>📋 Interview Method</small><span>' + esc(c.interviewMethod || '—') + '</span></div>'
+        + '<div class="row"><small>📋 Interview Format</small><span>' + esc(c.interviewFormat || '—') + '</span></div>'
         + '<div class="row"><small>✅ Progress</small><span>' + c.answerCount + '/' + c.questionCount + ' answered</span></div>'
         + (c.ownerName ? '<div class="row"><small>👤 Owner</small><span>' + (c.ownerAvatar ? '<img class="sum-avatar sm" src="' + esc(c.ownerAvatar) + '" alt="avatar"> ' : '') + '<b>' + esc(c.ownerName) + '</b></span></div>' : '')
         + '</div><div class="sum-foot no-print"><button class="btn btn-primary btn-sm" data-v="' + c.id + '">Open</button><button class="btn btn-ghost btn-sm" data-p="' + c.id + '">🖨 Print</button>' + (isAdmin() ? '<button class="btn btn-danger btn-sm" data-d="' + c.id + '">Delete</button>' : '') + '</div></div>';
@@ -742,7 +752,7 @@ async function pReport(selId, scope) {
     const li = (arr) => (arr || []).map(x => '<li>' + esc(x) + '</li>').join('');
     const ansN = qa.filter(q => q.answer && q.answer.trim()).length;
     $('#sBody').innerHTML = '<div class="card report"><h3>' + esc(iv.title) + '</h3>'
-      + '<p class="sub">👤 Interviewee: <b>' + esc(iv.interviewee || '-') + '</b> · 📅 Date: <b>' + esc(iv.date) + '</b> · ⏰ Time taken: <b>' + esc(iv.takenTime || autoTime(iv)) + '</b> (auto-detected by AI) · Type: ' + esc(iv.type || 'General') + ' · Status: ' + esc(iv.status) + '</p>'
+      + '<p class="sub">👤 Interviewee: <b>' + esc(iv.interviewee || '-') + '</b> · 📅 Date: <b>' + esc(iv.date) + '</b> · ⏰ Time taken: <b>' + esc(iv.takenTime || autoTime(iv)) + '</b> (auto-detected by AI) · 📋 Method: ' + esc(iv.interviewMethod || '—') + ' · 📋 Format: ' + esc(iv.interviewFormat || '—') + ' · Type: ' + esc(iv.type || 'General') + ' · Status: ' + esc(iv.status) + '</p>'
       + (iv.description ? '<p>' + esc(iv.description) + '</p>' : '')
       + '<h4>Interview statistics</h4><ul><li>Questions: ' + qa.length + '</li><li>Answered: ' + ansN + '</li><li>Completion: ' + (qa.length ? Math.round(ansN / qa.length * 100) : 0) + '%</li></ul>'
       + (sg ? '<h4>📝 Interview summary</h4><p>' + esc(sg.summary || '') + '</p>' + sec('🔑 Key findings', sg.keyFindings) + sec('⚠ Pain points', sg.painPoints) + sec('🚨 Major issues', sg.majorIssues) + sec('✅ Recommended solutions', sg.recommendations) + sec('💡 AI-generated solution ideas', sg.solutionIdeas)
