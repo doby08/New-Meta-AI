@@ -139,6 +139,15 @@ function addQuestions(userId, interviewId, items) {
   if (iv.status === 'draft') iv.status = 'in-progress';
   iv.updatedAt = now(); persist(); return rows;
 }
+function addQuestion(userId, interviewId, item) {
+  const iv = getInterview(userId, interviewId); if (!iv) return null;
+  const existing = DB.questions.filter(q => q.interviewId === interviewId);
+  const maxNum = existing.reduce((m, q) => Math.max(m, q.number || 0), 0);
+  const row = { id: uid('q'), interviewId, number: maxNum + 1, text: item.text, stakeholder: item.stakeholder || (iv.stakeholders || '').split(',')[0].trim() || 'General', category: item.category || 'Follow-up', answer: '', answeredAt: null, isFollowUp: item.isFollowUp ? 1 : 0, parentNumber: item.parentNumber || null, createdAt: now(), updatedAt: now() };
+  DB.questions.push(row);
+  if (iv.status === 'draft') iv.status = 'in-progress';
+  iv.updatedAt = now(); persist(); return row;
+}
 function updateQuestion(userId, qid, patch) {
   const q = DB.questions.find(x => x.id === qid); if (!q) return null;
   if (!getInterview(userId, q.interviewId)) return null;
@@ -211,4 +220,4 @@ function stats(userId) {
   };
 }
 
-module.exports = { initDb, persist, now, findUserByName, findUserByLogin, getUserById, safeUser, createUser, listUsers, updateUser, deleteUser, getSite, saveSite, getSettings, saveSettings, listInterviews, getInterview, withCounts, createInterview, updateInterview, deleteInterview, listQuestions, addQuestions, updateQuestion, deleteQuestion, saveAnswer, bankQuestions, getSuggestion, saveSuggestion, stats };
+module.exports = { initDb, persist, now, findUserByName, findUserByLogin, getUserById, safeUser, createUser, listUsers, updateUser, deleteUser, getSite, saveSite, getSettings, saveSettings, listInterviews, getInterview, withCounts, createInterview, updateInterview, deleteInterview, listQuestions, addQuestions, addQuestion, updateQuestion, deleteQuestion, saveAnswer, bankQuestions, getSuggestion, saveSuggestion, stats };

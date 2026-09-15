@@ -44,64 +44,85 @@ function localQuestions(title, stakeholders, count, method, format) {
   format = (format || 'Individual Interview').trim();
   const sh = splitStakeholders(stakeholders);
   if (!sh.length) throw Object.assign(new Error('stakeholders'), { code: 'VALIDATION' });
-  const kw = keywordsOf(title); const kwP = kw.length ? kw.join(', ') : 'the project';
+  const titleRef = title.trim(); // Use full title naturally
   const D = DOMAIN[detectDomain(title)] || DOMAIN.default;
   const cats = ['Current Process', 'Pain Points', 'Requirements', 'Data & Records', 'Reporting', 'Experience', 'Improvement', 'Priorities'];
-  const out = []; let i = 0;
+  const out = [];
+  let i = 0;
   const push = (s, c, t) => { if (out.length < count) out.push({ stakeholder: s, category: c, text: t }); };
   const isStructured = method === 'Structured';
   const isUnstructured = method === 'Unstructured';
-  const isSemi = !isStructured && !isUnstructured;
+
+  // Follow-up questions for Semi-Structured mode - context-aware
   const followUps = [
-    'Can you give me a specific example of that?',
-    'How often does that happen?',
-    'What impact does that have on your work?',
-    'Why do you think that is the case?',
-    'How would you prefer that to work instead?',
-    'Who else is affected by that?',
-    'When did you first notice that issue?',
-    'What would need to change for that to improve?'
+    'Can you give me a specific example of that in relation to "' + titleRef + '"?',
+    'How often does that happen in your work with "' + titleRef + '"?',
+    'What impact does that have on your role for "' + titleRef + '"?',
+    'Why do you think that happens with "' + titleRef + '"?',
+    'How would you prefer that to work instead for "' + titleRef + '"?',
+    'Who else is affected by that in "' + titleRef + '"?',
+    'When did you first notice that issue with "' + titleRef + '"?',
+    'What changes would improve that for "' + titleRef + '"?'
   ];
 
   while (out.length < count) {
     const s = sh[i % sh.length];
-    const round = Math.floor(i / sh.length);
-    const angle = round % 8;
+    // Cycle through categories independently of stakeholder rotation
+    const catIndex = i % cats.length;
+    const c = cats[catIndex];
+    const procIdx = i % D.proc.length;
+    const painIdx = i % D.pain.length;
 
     if (isStructured) {
-      if (angle === 0) push(s, cats[0], 'As ' + s + ', what are the exact steps you follow for ' + D.proc[i % D.proc.length] + ' in relation to "' + title + '"? List each step in order.');
-      else if (angle === 1) push(s, cats[1], 'What specific problems have you encountered with ' + D.pain[i % D.pain.length] + ' when working on ' + kwP + '? Describe one incident in detail.');
-      else if (angle === 2) push(s, cats[2], 'What specific features or functions must "' + title + '" provide for ' + s + ' to perform daily tasks effectively?');
-      else if (angle === 3) push(s, cats[3], 'What records or data does ' + s + ' create or update for "' + title + '"? What information must always be accurate?');
-      else if (angle === 4) push(s, cats[4], 'What reports or information does ' + s + ' need to receive regularly about "' + title + '"? How often and in what format?');
-      else if (angle === 5) push(s, cats[5], 'How does ' + s + ' currently receive updates about changes or approvals related to "' + title + '"?');
-      else if (angle === 6) push(s, cats[6], 'Which manual step in your current process for "' + title + '" would ' + s + ' most want to eliminate and why?');
-      else push(s, cats[7], 'What specific measurable outcome would indicate that "' + title + '" is successful for ' + s + '?');
+      // Structured: direct, specific, one-topic questions, NO follow-ups
+      const st = [
+        'As ' + s + ', what are the exact steps you follow for ' + D.proc[procIdx] + ' in relation to "' + titleRef + '"?',
+        'What specific problems have you encountered with ' + D.pain[painIdx] + ' when working on "' + titleRef + '"? Describe one incident.',
+        'What specific features or functions must "' + titleRef + '" provide for ' + s + ' to perform daily tasks effectively?',
+        'What records or data does ' + s + ' create or update for "' + titleRef + '"? What information must always be accurate?',
+        'What reports or information does ' + s + ' need to receive regularly about "' + titleRef + '"? How often and in what format?',
+        'How does ' + s + ' currently receive updates about changes or approvals related to "' + titleRef + '"?',
+        'Which manual step in your current process for "' + titleRef + '" would ' + s + ' most want to eliminate and why?',
+        'What specific measurable outcome would indicate that "' + titleRef + '" is successful for ' + s + '?'
+      ];
+      push(s, c, st[i % st.length]);
     } else if (isUnstructured) {
-      if (angle === 0) push(s, cats[0], "Can you tell me about your experience with " + kwP + "? I'd like to understand how things work from your perspective as " + s + '.');
-      else if (angle === 1) push(s, cats[1], 'What has been the most challenging part of your work related to ' + kwP + '? What happened?');
-      else if (angle === 2) push(s, cats[2], 'When you think about "' + title + '", what would make the biggest difference in your daily work as ' + s + '?');
-      else if (angle === 3) push(s, cats[3], 'Walk me through a recent situation where you had to handle records or information for "' + title + '". What was that like?');
-      else if (angle === 4) push(s, cats[4], "How do you currently stay informed about what's happening with " + kwP + '? What works well and what doesn\'t?');
-      else if (angle === 5) push(s, cats[5], 'In your own words, how should someone like you be kept in the loop about "' + title + '"?');
-      else if (angle === 6) push(s, cats[6], 'If you could change anything about how "' + title + '" works today, what would you start with and why?');
-      else push(s, cats[7], 'Looking ahead, what would success look like for "' + title + '" from where you sit as ' + s + '?');
+      // Unstructured: open-ended, conversational, exploratory, NO rigid questionnaire style
+      const st = [
+        'Can you tell me about your experience with "' + titleRef + '"? I\'d like to understand how things work from your perspective as ' + s + '.',
+        'What has been the most challenging part of your work related to "' + titleRef + '"? What happened?',
+        'When you think about "' + titleRef + '", what would make the biggest difference in your daily work as ' + s + '?',
+        'Walk me through a recent situation where you had to handle records or information for "' + titleRef + '". What was that like?',
+        'How do you currently stay informed about what\'s happening with "' + titleRef + '"? What works well and what doesn\'t?',
+        'In your own words, how should someone like you be kept in the loop about "' + titleRef + '"?',
+        'If you could change anything about how "' + titleRef + '" works today, what would you start with and why?',
+        'Looking ahead, what would success look like for "' + titleRef + '" from where you sit as ' + s + '?'
+      ];
+      push(s, c, st[i % st.length]);
     } else {
-      if (angle === 0) { push(s, cats[0], 'As ' + s + ', can you walk me through how you currently handle ' + D.proc[i % D.proc.length] + ' for "' + title + '"?'); if (out.length < count) push(s, cats[0], followUps[i % followUps.length]); }
-      else if (angle === 1) { push(s, cats[1], 'What problems related to ' + D.pain[i % D.pain.length] + ' have you experienced with ' + kwP + '?'); if (out.length < count) push(s, cats[1], followUps[(i + 1) % followUps.length]); }
-      else if (angle === 2) { push(s, cats[2], 'For "' + title + '", what are the most important requirements from ' + s + "'s perspective?"); if (out.length < count) push(s, cats[2], 'Can you rank those by priority and explain why?'); }
-      else if (angle === 3) { push(s, cats[3], 'Which records or information does ' + s + ' rely on for "' + title + '"?'); if (out.length < count) push(s, cats[3], 'What makes keeping those accurate difficult?'); }
-      else if (angle === 4) { push(s, cats[4], 'What reports or summaries does ' + s + ' need most often for "' + title + '"?'); if (out.length < count) push(s, cats[4], 'How quickly do you need them and in what format?'); }
-      else if (angle === 5) { push(s, cats[5], 'How should "' + title + '" keep ' + s + ' informed about status changes or approvals?'); if (out.length < count) push(s, cats[5], 'Which method would work best for you and why?'); }
-      else if (angle === 6) { push(s, cats[6], 'If one part of your current process could be automated by "' + title + '", which would ' + s + ' choose?'); if (out.length < count) push(s, cats[6], 'What benefits would that bring to your work?'); }
-      else { push(s, cats[7], 'What would make "' + title + '" a success from ' + s + "'s point of view?"); if (out.length < count) push(s, cats[7], 'How should we measure that success in the first few months?'); }
+      // Semi-Structured: main question + ONE contextual follow-up
+      const mainQs = [
+        'As ' + s + ', can you walk me through how you currently handle ' + D.proc[procIdx] + ' for "' + titleRef + '"?',
+        'What problems related to ' + D.pain[painIdx] + ' have you experienced with "' + titleRef + '"?',
+        'For "' + titleRef + '", what are the most important requirements from ' + s + '\'s perspective?',
+        'Which records or information does ' + s + ' rely on for "' + titleRef + '"?',
+        'What reports or summaries does ' + s + ' need most often for "' + titleRef + '"?',
+        'How should "' + titleRef + '" keep ' + s + ' informed about status changes or approvals?',
+        'If one part of your current process could be automated by "' + titleRef + '", which would ' + s + ' choose?',
+        'What would make "' + titleRef + '" a success from ' + s + '\'s point of view?'
+      ];
+      push(s, c, mainQs[i % mainQs.length]);
+      // Add ONE follow-up that is context-aware (uses title, stakeholder, process/pain)
+      if (out.length < count) {
+        const fu = followUps[i % followUps.length];
+        push(s, c, fu);
+      }
     }
     i++;
     if (i > count * 3 + 30) break;
   }
   return out.slice(0, count);
 }
-
 async function generateQuestions(title, stakeholders, count, method, format) {
   count = Math.max(1, Math.min(50, parseInt(count) || 20));
   method = (method || 'Semi-Structured').trim();
@@ -134,6 +155,98 @@ async function generateQuestions(title, stakeholders, count, method, format) {
   return { questions, source: 'openai:' + MODEL };
 }
 
+/* ---- Adaptive interview engine (method-aware, context-aware) ---- */
+const FLOW = ['Current Process', 'Pain Points / Problems', 'Cause or Details', 'Impact', 'User Requirements', 'Desired Features', 'Suggestions / Feedback'];
+
+function snippetOf(answer, max = 90) {
+  const clean = String(answer || '').replace(/\s+/g, ' ').trim();
+  if (!clean) return '';
+  const parts = clean.split(/[.;!?\n]/).map(s => s.trim()).filter(Boolean);
+  let s = parts.sort((x, y) => y.length - x.length)[0] || clean;
+  return s.length > max ? s.slice(0, max - 1).trim() + '…' : s;
+}
+
+/* Semi-Structured: follow-up CONNECTED to the respondent's last answer */
+function localFollowUp(iv, lastQ, answer) {
+  const a = String(answer || '').toLowerCase();
+  const snip = snippetOf(answer);
+  const st = lastQ.stakeholder;
+  if (/(manual|manually|paper|paperwork|handwritten|encode|encoding|retype|re-encode)/.test(a))
+    return 'You mentioned "' + snip + '". Which specific part of that manual process takes the most time, and what usually causes the delay?';
+  if (/(slow|slower|long|time|takes|queue|delay|wait|waiting|backlog)/.test(a))
+    return 'You said "' + snip + '". Which step exactly takes the longest, and how much time is lost because of it?';
+  if (/(error|errors|mistake|wrong|inaccurate|incorrect|missing|lost|lose|duplicate)/.test(a))
+    return 'When "' + snip + '" happens, what is usually the cause, and how do you currently fix it?';
+  if (/(difficult|hard|challenge|struggle|problem|issue|concern)/.test(a))
+    return 'Can you describe a specific situation where "' + snip + '" became a problem? What was the impact on your work as ' + st + '?';
+  if (/(because|due to|since|cause|reason)/.test(a))
+    return 'Since "' + snip + '", what effect does that have on the rest of the process for "' + iv.title + '"?';
+  if (/(need|needs|want|should|must|wish|hope|prefer|feature)/.test(a))
+    return 'Regarding "' + snip + '" — what specific feature would address that, and how should it work for ' + st + '?';
+  return 'You mentioned "' + snip + '". Can you give me a specific example of that and explain how it affects "' + iv.title + '"?';
+}
+
+/* Unstructured: fully adaptive — next question comes from the conversation itself,
+   following Current Process → Problems → Causes → Effects → Needs → Features → Suggestions */
+function localAdaptive(iv, qa) {
+  const answered = qa.filter(q => q.answer && q.answer.trim());
+  const t = iv.title;
+  const st = (answered.length ? answered[answered.length - 1].stakeholder : (iv.stakeholders || '').split(',')[0].trim()) || 'General';
+  const asked = qa.map(q => String(q.text).toLowerCase());
+  const lastAns = answered.length ? answered[answered.length - 1].answer : '';
+  const a = String(lastAns).toLowerCase();
+  const askedAbout = (kw) => asked.some(x => x.includes(kw));
+  const snip = snippetOf(lastAns);
+  const fresh = (text) => !asked.some(x => x === String(text).toLowerCase());
+
+  const stages = [
+    { test: () => answered.length === 0, text: 'To begin, can you tell me about your role and walk me through how you currently handle things related to "' + t + '"?' },
+    { test: () => /(problem|issue|difficult|hard|challenge|slow|manual|error|delay|queue|lost|wrong|concern)/.test(a) && !askedAbout('why do you think that keeps happening'), text: 'You mentioned "' + snip + '". Why do you think that keeps happening?' },
+    { test: () => /(because|due to|since|reason|cause|manual)/.test(a) && !askedAbout('what effect does it have on the people'), text: 'Given that "' + snip + '", what effect does it have on the people and process involved in "' + t + '"?' },
+    { test: () => /(effect|impact|affect|results in|leads to|delays|affects|wait|waiting)/.test(a) && !askedAbout('what do you need most'), text: 'Considering those effects, what do you need most to make your work easier?' },
+    { test: () => /(need|needs|want|wish|hope|should|must|improve|better)/.test(a) && !askedAbout('what should it do exactly'), text: 'If "' + t + '" could include one feature to solve what we just discussed, what should it do exactly?' },
+    { test: () => /(feature|function|automate|automation|online|digital|system)/.test(a) && !askedAbout('how would that feature change'), text: 'How would that feature change the way you work day to day? Do you have any concerns about it?' }
+  ];
+  for (const s of stages) if (s.test()) return { text: s.text, stakeholder: st, category: 'Adaptive' };
+
+  // Explore topics not yet covered
+  const areas = [
+    ['records', 'How are records and information currently kept for "' + t + '", and where do things usually get misplaced?'],
+    ['reports', 'What reports or summaries do you wish you had instantly available for "' + t + '"?'],
+    ['approval', 'Walk me through how approvals work today for "' + t + '" — where does it usually slow down?'],
+    ['redesign', 'If you could redesign one part of "' + t + '" from scratch, what would it look like and why?']
+  ];
+  for (const [kw, text] of areas) if (!askedAbout(kw)) return { text, stakeholder: st, category: 'Adaptive' };
+  return { text: 'Before we wrap up, is there anything about "' + t + '" we have not covered that you think is important to share?', stakeholder: st, category: 'Adaptive' };
+}
+
+/* Generates the NEXT question from the interview context.
+   mode: 'followup' (Semi-Structured) or 'adaptive' (Unstructured). */
+async function nextQuestion(iv, qa, mode) {
+  const answered = qa.filter(q => q.answer && q.answer.trim());
+  const lastQ = answered.length ? answered[answered.length - 1] : null;
+  if (!hasOpenAI()) {
+    if (mode === 'followup') {
+      if (!lastQ) return { text: 'Can you tell me more about how you currently handle your tasks related to "' + iv.title + '"?', category: 'Follow-up', source: 'local-smart' };
+      return { text: localFollowUp(iv, lastQ, lastQ.answer), category: 'Follow-up', source: 'local-smart' };
+    }
+    return { ...localAdaptive(iv, qa), source: 'local-smart' };
+  }
+  const conv = qa.map(q => 'Q' + q.number + (q.isFollowUp ? ' (AI follow-up)' : '') + ' [' + q.stakeholder + '/' + q.category + ']: ' + q.text + '\nA: ' + (q.answer && q.answer.trim() ? q.answer : '(not answered yet)')).join('\n\n');
+  const isFollowup = mode === 'followup';
+  const prompt = 'You are conducting a ' + (iv.interviewMethod || 'Semi-Structured') + ' requirements-gathering interview for "' + iv.title + '" (Stakeholders: ' + iv.stakeholders + ', Format: ' + (iv.interviewFormat || 'Individual Interview') + ').\n'
+    + 'Conversation so far:\n' + conv + '\n\n'
+    + (isFollowup
+      ? 'TASK: The respondent just answered the LAST question above. Analyze that answer. If it contains useful information, problems, unclear details, or something needing clarification, generate ONE follow-up question that is DIRECTLY connected to the specific content of that answer (quote or reference part of it). Do NOT move to a new topic. Do NOT repeat previous questions. If the answer is already fully clear, generate a follow-up that explores its impact on the system requirements.\n'
+      : 'TASK: This is an UNSTRUCTURED interview — there is NO fixed question list. Generate the NEXT question based on the latest answer and the full conversation history. Follow this logical flow when possible: Current Process → Problems → Causes → Effects → Needs → Desired Features → Suggestions. If the respondent mentioned a new issue, explore that issue before moving on. The question must be relevant, logically connected to what was just said, and must NOT repeat any previous question.\n')
+    + 'Return ONLY valid JSON: {"text": "the question", "category": "one or two words"}. No markdown, no commentary.';
+  const raw = await callOpenAI([{ role: 'system', content: 'You output only valid JSON objects.' }, { role: 'user', content: prompt }], 700);
+  const cleaned = raw.replace(/```json|```/g, '').trim();
+  const j = JSON.parse(cleaned.slice(cleaned.indexOf('{'), cleaned.lastIndexOf('}') + 1));
+  if (!j.text) throw new Error('AI returned no question.');
+  return { text: String(j.text), category: String(j.category || (isFollowup ? 'Follow-up' : 'Adaptive')), source: 'openai:' + MODEL };
+}
+
 
 function localAnalysis(iv, qa) {
   const answered = qa.filter(q => q.answer && q.answer.trim());
@@ -164,4 +277,4 @@ async function analyzeInterview(iv, qa) {
   return { analysis: JSON.parse(cleaned.slice(cleaned.indexOf('{'), cleaned.lastIndexOf('}') + 1)), source: 'openai:' + MODEL };
 }
 
-module.exports = { hasOpenAI, MODEL, generateQuestions, analyzeInterview };
+module.exports = { hasOpenAI, MODEL, generateQuestions, analyzeInterview, localQuestions, nextQuestion };

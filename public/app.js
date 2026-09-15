@@ -483,13 +483,17 @@ function drawQA() {
     + '<p style="color:var(--muted);font-size:13px;margin:0">' + esc(interview.stakeholders) + '</p>'
     + '<div class="progress"><i style="width:' + Math.round(done / list.length * 100) + '%"></i></div>'
     + '<small style="color:var(--muted)">Question ' + (idx + 1) + ' of ' + list.length + ' · ' + done + ' answered</small>'
-    + '<div class="qa-meta"><span class="chip">' + esc(q.stakeholder) + '</span><span class="chip cyan">' + esc(q.category) + '</span></div>'
+    + '<div class="qa-meta"><span class="chip">' + esc(q.stakeholder) + '</span><span class="chip cyan">' + esc(q.category) + '</span>'
+    + (q.isFollowUp ? '<span class="chip" style="background:#ede9fe;color:#6d28d9">🤖 AI Follow-up Question</span>' : '<span class="chip" style="background:#dcfce7;color:#15803d">📋 Main Question</span>')
+    + (interview.interviewMethod === 'Structured' ? '<span class="chip" style="background:#f1f5f9;color:#475569">🔒 Fixed sequence</span>' : '') + '</div>'
     + '<p style="font-size:16.5px;font-weight:600;line-height:1.55">' + esc(q.text) + '</p>'
     + '<label class="field"><span>Your answer</span><textarea id="qAns" placeholder="Type the stakeholder’s answer here…">' + esc(q.answer || '') + '</textarea></label>'
     + '<div class="qa-nav"><button class="btn btn-ghost" id="qPrev"' + (idx === 0 ? ' disabled' : '') + '>← Previous</button>'
     + '<button class="btn btn-primary" id="qSave">Save answer</button>'
     + '<button class="btn btn-ghost" id="qNext"' + (idx === list.length - 1 ? ' disabled' : '') + '>Next →</button></div>'
-    + '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center"><button class="btn btn-ghost btn-sm" id="qMore">⚡ Generate more</button>'
+    + '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center">'
+    + (interview.interviewMethod !== 'Structured' ? '<button class="btn btn-ghost btn-sm" id="qAiNext" title="AI analyzes the last answer and asks the next question">🤖 AI Next Question</button>' : '')
+    + '<button class="btn btn-ghost btn-sm" id="qMore">⚡ Generate more</button>'
     + '<button class="btn btn-ghost btn-sm" id="qJump">Jump to…</button>'
     + '<button class="btn btn-primary btn-sm" id="qFinish" style="margin-left:auto" title="Save everything and get the AI recommended solutions">🏁 Finish Interview</button></div></div>';
   $('#qBack').onclick = () => { S.qa.dirty = false; pMy(); };
@@ -509,6 +513,19 @@ function drawQA() {
       drawQA();
     } catch (err) { btnLoading(btn, false); toast(err.message, 'error'); }
   };
+  $('#qAiNext') && ($('#qAiNext').onclick = async (e) => {
+    const btn = e.currentTarget; btnLoading(btn, true, 'AI is thinking…');
+    try {
+      const g = await api('/api/interviews/' + S.qa.id + '/next', { method: 'POST', body: '{}' });
+      if (g.done) { btnLoading(btn, false); toast('All main questions are answered — the interview flow is complete.'); return; }
+      S.qa.list = await api('/api/interviews/' + S.qa.id + '/questions').then(r => r.questions);
+      const ni = S.qa.list.findIndex(x => x.id === g.question.id);
+      S.qa.idx = ni >= 0 ? ni : S.qa.list.length - 1;
+      S.qa.dirty = false;
+      drawQA();
+      toast(g.kind === 'followup' ? '🤖 AI generated a follow-up based on the last answer.' : '🤖 AI generated the next question from the conversation.');
+    } catch (err) { btnLoading(btn, false); toast(err.message, 'error'); }
+  });
   $('#qMore').onclick = async (e) => {
     const btn = e.currentTarget; btnLoading(btn, true, 'Generating…');
     try { const g = await api('/api/interviews/' + S.qa.id + '/generate', { method: 'POST', body: JSON.stringify({ count: 10 }) }); toast('Questions generated successfully (+' + g.questions.length + ').'); pAnswer(S.qa.id); }

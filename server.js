@@ -211,6 +211,54 @@ app.post('/api/questions/:qid/answer', requireAuth, (req, res) => {
   res.json({ ok: true, ...r });
 });
 
+/* ---- Adaptive next-question engine (method-aware) ----
+   Structured       → fixed sequence: returns next unanswered main question (no AI).
+   Semi-Structured  → after a main question is answered, AI generates ONE follow-up
+                      connected to that answer; after the follow-up, moves to next main.
+   Unstructured     → AI generates the next question from the full conversation context. */
+app.post('/api/interviews/:id/next', requireAuth, async (req, res) => {
+  try {
+    const uidv = scopeUid(req);
+    const iv = db.getInterview(uidv, req.params.id);
+    if (!iv) return res.status(404).json({ ok: false, error: 'Interview not found.' });
+    const qa = db.listQuestions(uidv, iv.id) || [];
+    if (!qa.length) return res.status(400).json({ ok: false, error: 'Generate the main questions first.' });
+    const method = iv.interviewMethod || 'Semi-Structured';
+    const answered = qa.filter(q => q.answer && q.answer.trim());
+    const lastAns = answered.length ? answered[answered.length - 1] : null;
+
+    if (method === 'Structured') {
+      const next = qa.find(q => !(q.answer && q.answer.trim()));
+      if (!next) return res.json({ ok: true, done: true });
+      return res.json({ ok: true, kind: 'main', question: next });
+    }
+
+    if (method === 'Semi-Structured') {
+      if (!lastAns) {
+        const first = qa.find(q => !(q.answer && q.answer.trim()));
+        return res.json({ ok: true, kind: 'main', question: first });
+      }
+      const hasFollowUp = qa.some(q => q.isFollowUp && q.parentNumber === lastAns.number);
+      if (lastAns.isFollowUp || hasFollowUp) {
+        const next = qa.find(q => !(q.answer && q.answer.trim()) && !q.isFollowUp);
+        if (!next) return res.json({ ok: true, done: true });
+        return res.json({ ok: true, kind: 'main', question: next });
+      }
+      const out = await ai.nextQuestion(db.withCounts(iv), qa, 'followup');
+      const saved = db.addQuestion(uidv, iv.id, { text: out.text, category: out.category || 'Follow-up', stakeholder: lastAns.stakeholder, isFollowUp: 1, parentNumber: lastAns.number });
+      return res.json({ ok: true, kind: 'followup', question: saved, source: out.source });
+    }
+
+    // Unstructured — fully adaptive
+    const out = await ai.nextQuestion(db.withCounts(iv), qa, 'adaptive');
+    const saved = db.addQuestion(uidv, iv.id, { text: out.text, category: out.category || 'Adaptive', stakeholder: (lastAns && lastAns.stakeholder) || (iv.stakeholders || '').split(',')[0].trim() || 'General', isFollowUp: answered.length ? 1 : 0, parentNumber: lastAns ? lastAns.number : null });
+    return res.json({ ok: true, kind: answered.length ? 'followup' : 'main', question: saved, source: out.source });
+  } catch (e) {
+    res.status(502).json({ ok: false, error: 'AI service is unavailable right now. Please try again. (' + String((e && e.message) || e).slice(0, 160) + ')' });
+  }
+});
+
+
 /* ---- AI analysis / questions bank / profile / settings ---- */
 app.post('/api/interviews/:id/analyze', requireAuth, async (req, res) => {
   try {
