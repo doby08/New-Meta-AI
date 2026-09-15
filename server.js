@@ -179,7 +179,7 @@ app.post('/api/interviews/:id/generate', requireAuth, async (req, res) => {
     const iv = db.getInterview(req.user.id, req.params.id);
     if (!iv) return res.status(404).json({ ok: false, error: 'Interview not found.' });
     const count = Math.max(1, Math.min(50, parseInt(req.body && req.body.count) || 20));
-    const out = await ai.generateQuestions(iv.title, iv.stakeholders, count);
+    const out = await ai.generateQuestions(iv.title, iv.stakeholders, count, iv.interviewMethod || 'Semi-Structured', iv.interviewFormat || 'Individual Interview');
     const rows = db.addQuestions(req.user.id, iv.id, out.questions);
     res.json({ ok: true, questions: rows, source: out.source });
   } catch (e) {
