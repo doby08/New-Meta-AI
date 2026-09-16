@@ -3,6 +3,22 @@
 const MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 const hasOpenAI = () => Boolean(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim());
 
+/* ---- STEP 1 helpers: dual-language prompts (Tagalog | English) ---- */
+function interviewerSystemPrompt(stakeholder, language, topic) {
+  return 'You are an empathetic AI interviewer. Generate 3-5 concise survey questions based on:\n'
+    + 'Stakeholder: ' + stakeholder + ', Language: ' + language + ', Topic: ' + topic + '.\n'
+    + 'If Tagalog is selected, use simple, respectful, and natural conversational Tagalog.';
+}
+function evaluatorSystemPrompt(language) {
+  return 'Analyze all answers holistically and output JSON:\n'
+    + '{\n  "score": 1-5 (5=Very High, 4=High, 3=Moderate, 2=Low, 1=Very Low),\n'
+    + '  "level": "Scale Name",\n'
+    + '  "summary": "Brief summary in ' + language + '",\n'
+    + '  "meaning": "Explanation of the score in ' + language + '",\n'
+    + '  "recommendations": ["Recommendation 1", "Recommendation 2"]\n}';
+}
+function normLang(v) { return v === 'English' ? 'English' : 'Tagalog'; }
+
 async function callOpenAI(messages, maxTokens = 2500) {
   const r = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -12,6 +28,20 @@ async function callOpenAI(messages, maxTokens = 2500) {
   if (!r.ok) { const t = await r.text().catch(() => ''); throw new Error('OpenAI error ' + r.status + ': ' + t.slice(0, 300)); }
   const j = await r.json();
   return (j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content || '').trim();
+}
+
+/* ---- STEP 4: Local Ollama fallback (works fully offline on the server) ---- */
+const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434/api/generate';
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'llama3';
+async function callOllama(prompt, model) {
+  const r = await fetch(OLLAMA_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: model || OLLAMA_MODEL, prompt, stream: false })
+  });
+  if (!r.ok) { const t = await r.text().catch(() => ''); throw new Error('Ollama error ' + r.status + ': ' + t.slice(0, 300)); }
+  const j = await r.json();
+  return String((j && j.response) || '').trim();
 }
 
 function splitStakeholders(s) {
@@ -300,4 +330,110 @@ async function analyzeInterview(iv, qa) {
   return { analysis: JSON.parse(cleaned.slice(cleaned.indexOf('{'), cleaned.lastIndexOf('}') + 1)), source: 'openai:' + MODEL };
 }
 
-module.exports = { hasOpenAI, MODEL, generateQuestions, analyzeInterview, localQuestions, nextQuestion };
+/* ---- STEPS 1+4+5: dual-language survey questions (3-5) + 1-5 scoring ---- */
+function localSurveyQuestions(stakeholder, language, topic) {
+  const tl = normLang(language) === 'Tagalog';
+  const who = stakeholder || 'stakeholder';
+  if (tl) return [
+    { id: 1, question: 'Kumusta po ang inyong karanasan tungkol sa "' + topic + '"? Maaari po ba ninyong ikuwento?' },
+    { id: 2, question: 'Ano po ang pinakamalaking hamon o problema na nararanasan ninyo bilang ' + who + '?' },
+    { id: 3, question: 'Aling bahagi po ng serbisyo ang pinakanasiyahan ninyo, at alin ang kailangang ayusin?' },
+    { id: 4, question: 'Kung may isang bagay po kayong babaguhin agad, ano po ito at bakit?' },
+    { id: 5, question: 'May mungkahi po ba kayo para mas mapabuti ang suporta sa mga ' + who + '?' }
+  ];
+  return [
+    { id: 1, question: 'How would you describe your experience with "' + topic + '"?' },
+    { id: 2, question: 'As a ' + who + ', what is the biggest challenge you currently face?' },
+    { id: 3, question: 'Which part of the service satisfies you most, and which needs improvement?' },
+    { id: 4, question: 'If one thing could be fixed immediately, what would it be and why?' },
+    { id: 5, question: 'What suggestions do you have to better support ' + who + 's?' }
+  ];
+}
+
+async function generateSurveyQuestions(stakeholder, language, topic) {
+  const lang = normLang(language);
+  const st = String(stakeholder || 'General').slice(0, 120);
+  const tp = String(topic || 'General Survey').slice(0, 300);
+  const fallback = () => ({ questions: localSurveyQuestions(st, lang, tp), source: 'local-smart' });
+  // PRIMARY: OpenAI gpt-4o-mini with the dynamic interviewer prompt.
+  if (hasOpenAI()) {
+    try {
+      const raw = await callOpenAI([
+        { role: 'system', content: interviewerSystemPrompt(st, lang, tp) },
+        { role: 'user', content: 'OUTPUT FORMAT (JSON ONLY): {"topic":"' + tp + '","stakeholder":"' + st + '","language":"' + lang + '","questions":[{"id":1,"question":"..."}]}' }
+      ], 1200);
+      const cleaned = raw.replace(/```json|```/g, '').trim();
+      const j = JSON.parse(cleaned.slice(cleaned.indexOf('{'), cleaned.lastIndexOf('}') + 1));
+      if (j && Array.isArray(j.questions) && j.questions.length) {
+        return { questions: j.questions.slice(0, 5).map((q, i) => ({ id: i + 1, question: String(q.question || q.text || '').slice(0, 2000) })), source: 'openai:' + MODEL };
+      }
+    } catch (e) { /* fall through to Ollama, then local */ }
+  }
+  // FALLBACK: local Ollama instance (offline-capable).
+  try {
+    const raw = await callOllama(interviewerSystemPrompt(st, lang, tp) + ' Reply with JSON ONLY: {"questions":[{"id":1,"question":"..."}]}. Topic: ' + tp);
+    const j = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1));
+    if (j && Array.isArray(j.questions) && j.questions.length) {
+      return { questions: j.questions.slice(0, 5).map((q, i) => ({ id: i + 1, question: String(q.question || q.text || '').slice(0, 2000) })), source: 'ollama:' + OLLAMA_MODEL };
+    }
+  } catch (e) { /* final fallback below */ }
+  return fallback();
+}
+
+function localScoreEvaluation(answers, language) {
+  const lang = normLang(language);
+  const text = (answers || []).map(a => String((a && a.answer) || '')).join(' ').toLowerCase();
+  const pos = ['maganda', 'maayos', 'salamat', 'nasiyahan', 'mabilis', 'good', 'great', 'satisfied', 'excellent', 'helpful', 'mabuti', 'okay'];
+  const neg = ['mabagal', 'problema', 'kulang', 'mahirap', 'hindi', 'wala', 'sirain', 'bad', 'poor', 'slow', 'lacking', 'problem', 'worst', 'urgent'];
+  let score = 3;
+  pos.forEach(w => { if (text.includes(w)) score += 0.5; });
+  neg.forEach(w => { if (text.includes(w)) score -= 0.5; });
+  if (text.length < 20) score = Math.min(score, 3);
+  score = Math.max(1, Math.min(5, Math.round(score)));
+  const LEVELS = { 5: 'Very High', 4: 'High', 3: 'Moderate', 2: 'Low', 1: 'Very Low' };
+  const MEAN = {
+    5: { Tagalog: 'Napakapositibo — ganap na natugunan ang pangunahing pangangailangan.', English: 'Highly positive, critical needs fully met.' },
+    4: { Tagalog: 'Positibo — kaunting pag-aayos na lang ang kailangan.', English: 'Positive outcome, minor adjustments needed.' },
+    3: { Tagalog: 'Katamtaman — kailangan ng regular na pag-monitor.', English: 'Neutral/average condition, standard monitoring required.' },
+    2: { Tagalog: 'Mababa — kailangan ng interbensyon, may malaking balakid.', English: 'Requires intervention, significant friction identified.' },
+    1: { Tagalog: 'Napakababa — kailangan ng agarang aksyon.', English: 'Urgent action needed, severe blockers.' }
+  };
+  return { score, level: LEVELS[score], meaning: MEAN[score][lang] };
+}
+
+async function evaluateSurvey(stakeholder, language, topic, answers) {
+  const lang = normLang(language);
+  const qaText = (answers || []).map((a, i) => 'Q' + (i + 1) + ': ' + (a.question || '') + '\nA: ' + (a.answer || '(no answer)')).join('\n\n');
+  const parse = (raw) => JSON.parse(String(raw).replace(/```json|```/g, '').trim().slice(String(raw).indexOf('{'), String(raw).lastIndexOf('}') + 1));
+  // PRIMARY: OpenAI
+  if (hasOpenAI()) {
+    try {
+      const raw = await callOpenAI([
+        { role: 'system', content: evaluatorSystemPrompt(lang) },
+        { role: 'user', content: 'Stakeholder: ' + stakeholder + '\nTopic: ' + topic + '\nLanguage: ' + lang + '\n\nAnswers:\n' + qaText }
+      ], 1500);
+      const j = parse(raw);
+      const score = Math.max(1, Math.min(5, parseInt(j.score) || 3));
+      return { evaluation: { score, level: j.level || 'Moderate', summary: String(j.summary || ''), meaning: String(j.meaning || ''), recommendations: Array.isArray(j.recommendations) ? j.recommendations : [] }, source: 'openai:' + MODEL };
+    } catch (e) { /* try Ollama */ }
+  }
+  try {
+    const raw = await callOllama(evaluatorSystemPrompt(lang) + '\nStakeholder: ' + stakeholder + '\nTopic: ' + topic + '\nAnswers:\n' + qaText + '\nReply JSON only.');
+    const j = parse(raw);
+    const score = Math.max(1, Math.min(5, parseInt(j.score) || 3));
+    return { evaluation: { score, level: j.level || 'Moderate', summary: String(j.summary || ''), meaning: String(j.meaning || ''), recommendations: Array.isArray(j.recommendations) ? j.recommendations : [] }, source: 'ollama:' + OLLAMA_MODEL };
+  } catch (e) { /* local heuristic */ }
+  const l = localScoreEvaluation(answers, lang);
+  const tl = lang === 'Tagalog';
+  return {
+    evaluation: {
+      score: l.score, level: l.level,
+      summary: tl ? 'Batay sa ' + (answers || []).length + ' na sagot, ang pangkalahatang marka ay ' + l.score + ' (' + l.level + ').' : 'Based on ' + (answers || []).length + ' answer(s), the overall score is ' + l.score + ' (' + l.level + ').',
+      meaning: l.meaning,
+      recommendations: tl ? ['Ipagpatuloy ang pag-monitor sa sektor na ito.', 'Tugunan ang mga nabanggit na hamon sa mga sagot.'] : ['Continue monitoring this sector.', 'Address the challenges mentioned in the answers.']
+    },
+    source: 'local-smart'
+  };
+}
+
+module.exports = { hasOpenAI, MODEL, OLLAMA_URL, OLLAMA_MODEL, generateQuestions, analyzeInterview, localQuestions, nextQuestion, interviewerSystemPrompt, evaluatorSystemPrompt, generateSurveyQuestions, evaluateSurvey, localScoreEvaluation };

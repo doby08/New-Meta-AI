@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="tl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Public Dashboard · Stakeholder Analytics (1-5 Scale)</title>
+<link rel="stylesheet" href="/styles.css">
+<style>
+.dash-wrap{max-width:900px;margin:0 auto;padding:18px 14px 60px}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;text-align:center}
+.kpi .n{font-size:30px;font-weight:800}
+.bars{display:flex;gap:8px;align-items:flex-end;height:150px;margin:12px 0;padding:10px;background:var(--card);border:1px solid var(--line);border-radius:14px}
+.bars .b{flex:1;text-align:center}
+.bars .f{border-radius:8px 8px 0 0;min-height:6px}
+.rep{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin:10px 0}
+.badge{display:inline-block;padding:3px 10px;border-radius:999px;color:#fff;font-weight:700;font-size:12px}
+@media(max-width:640px){.kpis{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<div class="dash-wrap">
+  <div class="card">
+    <div class="card-head"><div><h2>📊 Public Dashboard</h2><p class="muted">Bukas sa lahat — kahit naka-logout. Open to everyone, no login needed.</p></div></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <select id="fRole"><option value="">Lahat ng sektor / All sectors</option></select>
+      <select id="fLang"><option value="">Tagalog + English</option><option>Tagalog</option><option>English</option></select>
+      <button class="btn btn-primary btn-sm" id="fGo">Filter</button>
+      <a class="btn btn-ghost btn-sm" href="/survey">📝 Sagutan ang Survey</a>
+    </div>
+    <div class="kpis">
+      <div class="kpi"><div class="n" id="kTotal">–</div><small>Total reports</small></div>
+      <div class="kpi"><div class="n" id="kAvg">–</div><small>Average score / 5</small></div>
+      <div class="kpi"><div class="n" id="kResp">–</div><small>Survey responses</small></div>
+    </div>
+    <h3>⭐ Score distribution (1–5)</h3>
+    <div class="bars" id="distBars"></div>
+    <h3>🏷️ Average per stakeholder</h3>
+    <div id="bySt"></div>
+  </div>
+  <h3>📝 Pinakabagong ulat / Latest reports</h3>
+  <div id="latest"></div>
+</div>
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const COLORS = { 5: '#059669', 4: '#16a34a', 3: '#d97706', 2: '#ea580c', 1: '#dc2626' };
+async function load() {
+  const q = 'stakeholder=' + encodeURIComponent($('#fRole').value) + '&language=' + encodeURIComponent($('#fLang').value);
+  const j = await fetch('/api/public/analytics?' + q).then(r => r.json());
+  const a = j.analytics;
+  $('#kTotal').textContent = a.total; $('#kAvg').textContent = a.average + ' / 5'; $('#kResp').textContent = j.responses.length;
+  const max = Math.max(1, ...Object.values(a.distribution));
+  $('#distBars').innerHTML = [5, 4, 3, 2, 1].map(s => '<div class="b"><div class="f" style="height:' + Math.round(a.distribution[s] / max * 120) + 'px;background:' + COLORS[s] + '"></div><b>' + s + '</b><div><small>' + a.distribution[s] + '</small></div></div>').join('');
+  $('#bySt').innerHTML = a.byStakeholder.length ? a.byStakeholder.map(x => '<span class="insight-tag">' + esc(x.stakeholder) + ': ' + x.average + ' ⭐ (' + x.count + ')</span>').join('') : '<p class="muted">Wala pang datos. / No data yet.</p>';
+  $('#latest').innerHTML = a.latest.length ? a.latest.map(r => '<div class="rep"><span class="badge" style="background:' + COLORS[r.score] + '">' + r.score + '/5 · ' + esc(r.level) + '</span> <b>' + esc(r.topic) + '</b> <small class="muted">· ' + esc(r.stakeholder) + ' · ' + esc(r.language) + ' · ' + esc((r.createdAt || '').slice(0, 10)) + '</small><p>' + esc(r.summary || r.meaning || '') + '</p>' + (r.recommendations && r.recommendations.length ? '<ul>' + r.recommendations.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>' : '') + '</div>').join('') : '<div class="card"><p class="muted">Wala pang na-save na ulat. Maging una — <a href="/survey">sagutan ang survey</a>.</p></div>';
+}
+async function roles() {
+  try { const j = await fetch('/api/survey/roles').then(r => r.json()); (j.roles || []).forEach(r => { const o = document.createElement('option'); o.textContent = r; $('#fRole').appendChild(o); }); } catch {}
+}
+$('#fGo').onclick = load;
+roles().then(load);
+</script>
+</body>
+</html>

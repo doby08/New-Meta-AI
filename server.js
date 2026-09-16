@@ -303,6 +303,72 @@ app.get('/api/interviews/:id/suggestion', requireAuth, (req, res) => {
 app.get('/api/bank', requireAuth, (req, res) => {
   res.json({ ok: true, questions: db.bankQuestions(null, req.query), interviews: db.listInterviews(null).map(i => ({ id: i.id, title: i.title })) });
 });
+/* ================= STEPS 1-6: Offline-Ready Survey + Dual AI + Public Analytics =================
+   Public (no login): topics list, AI question generation, survey submit (+auto evaluate),
+   public analytics dashboard data. Admin-only: topic CRUD, full response list. */
+app.get('/api/survey/topics', (req, res) => {
+  const list = db.listTopics({ stakeholder: req.query.stakeholder || '', language: req.query.language || '', activeOnly: true });
+  res.json({ ok: true, topics: list });
+});
+app.get('/api/survey/roles', (req, res) => {
+  const roles = [...new Set(db.listTopics({ activeOnly: true }).map(t => t.stakeholder))];
+  res.json({ ok: true, roles: roles.length ? roles : ['Farmer', 'Vendor', 'Resident'] });
+});
+app.post('/api/ai/questions', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const out = await ai.generateSurveyQuestions(clean(b.stakeholder, 120) || 'General', b.language, clean(b.topic, 300) || 'General Survey');
+    res.json({ ok: true, topic: clean(b.topic, 300), stakeholder: clean(b.stakeholder, 120), language: b.language === 'English' ? 'English' : 'Tagalog', questions: out.questions, source: out.source });
+  } catch (e) { res.status(502).json({ ok: false, error: 'AI service unavailable. (' + String((e && e.message) || e).slice(0, 160) + ')' }); }
+});
+app.post('/api/ai/evaluate', async (req, res) => {
+  // STEP 4 dual engine: OpenAI (gpt-4o-mini) primary -> Ollama fallback -> local heuristic. See ai.js evaluateSurvey.
+  try {
+    const b = req.body || {};
+    const out = await ai.evaluateSurvey(clean(b.stakeholder, 120) || 'General', b.language, clean(b.topic, 300) || 'General Survey', Array.isArray(b.answers) ? b.answers : []);
+    res.json({ ok: true, ...out.evaluation, engine: out.source });
+  } catch (e) { res.status(502).json({ ok: false, error: 'AI service unavailable. (' + String((e && e.message) || e).slice(0, 160) + ')' }); }
+});
+app.post('/api/survey/submit', async (req, res) => {
+  try {
+    const b = req.body || {};
+    if (!Array.isArray(b.answers) || !b.answers.length) return res.status(400).json({ ok: false, error: 'Pakilagyan po ng kahit isang sagot. / Please add at least one answer.' });
+    const saved = db.saveSurveyResponse({ clientId: clean(b.clientId, 120), stakeholder: clean(b.stakeholder, 120), language: b.language, topic: clean(b.topic, 300), topicId: clean(b.topicId, 120), answers: b.answers, deviceLabel: clean(b.deviceLabel, 300), createdAt: b.createdAt });
+    let report = null, engine = 'local-smart';
+    if (b.autoEvaluate !== false) {
+      try {
+        const out = await ai.evaluateSurvey(saved.stakeholder, saved.language, saved.topic, saved.answers);
+        report = db.saveReport({ responseId: saved.id, stakeholder: saved.stakeholder, language: saved.language, topic: saved.topic, score: out.evaluation.score, level: out.evaluation.level, summary: out.evaluation.summary, meaning: out.evaluation.meaning, recommendations: out.evaluation.recommendations, engine: out.source });
+        engine = out.source;
+      } catch { report = db.saveReport({ responseId: saved.id, stakeholder: saved.stakeholder, language: saved.language, topic: saved.topic, score: 3, level: 'Moderate', summary: '', recommendations: [], engine: 'local-smart' }); }
+    }
+    res.json({ ok: true, response: saved, report, engine });
+  } catch (e) { res.status(500).json({ ok: false, error: 'Submit failed. Please try again.' }); }
+});
+/* STEP 6: public read-only analytics — NO login required (public RLS equivalent). */
+app.get('/api/public/analytics', (req, res) => {
+  res.json({ ok: true, analytics: db.reportAggregates({ stakeholder: req.query.stakeholder || '', language: req.query.language || '' }), responses: db.listSurveyResponses({ stakeholder: req.query.stakeholder || '', language: req.query.language || '' }).slice(0, 50) });
+});
+app.get('/api/public/reports', (req, res) => {
+  res.json({ ok: true, reports: db.listReports({ stakeholder: req.query.stakeholder || '', language: req.query.language || '' }).slice(0, 50) });
+});
+app.get('/api/ai/status', (req, res) => {
+  res.json({ ok: true, openai: ai.hasOpenAI(), openaiModel: ai.MODEL, ollamaUrl: ai.OLLAMA_URL, ollamaModel: ai.OLLAMA_MODEL });
+});
+/* Admin: topic CRUD (QR setup reads from these) + full response list. */
+app.get('/api/admin/topics', requireAdmin, (req, res) => res.json({ ok: true, topics: db.listTopics({}) }));
+app.post('/api/admin/topics', requireAdmin, (req, res) => {
+  const b = req.body || {};
+  if (!b.id && !String(b.topic || '').trim()) return res.status(400).json({ ok: false, error: 'Please enter a topic name.' });
+  const t = db.upsertTopic(b);
+  if (!t) return res.status(404).json({ ok: false, error: 'Topic not found.' });
+  res.json({ ok: true, topic: t });
+});
+app.delete('/api/admin/topics/:id', requireAdmin, (req, res) => {
+  if (!db.deleteTopic(req.params.id)) return res.status(404).json({ ok: false, error: 'Topic not found.' });
+  res.json({ ok: true });
+});
+app.get('/api/admin/responses', requireAdmin, (req, res) => res.json({ ok: true, responses: db.listSurveyResponses({}), analytics: db.reportAggregates({}) }));
 app.get('/api/profile', requireAuth, (req, res) => res.json({ ok: true, user: db.safeUser(req.user) }));
 app.put('/api/profile', requireAuth, async (req, res) => {
   try {
@@ -336,6 +402,11 @@ app.put('/api/settings', requireAuth, (req, res) => {
   if (b.compact !== undefined) patch.compact = Boolean(b.compact);
   res.json({ ok: true, settings: db.saveSettings(req.user.id, patch) });
 });
+
+/* Public pages (no login): field survey + open analytics dashboard. */
+app.get('/survey', (req, res) => res.sendFile(path.join(__dirname, 'public', 'survey.html')));
+app.get('/public/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
+app.get('/reports', (req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
 
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 

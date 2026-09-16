@@ -8,8 +8,8 @@ const S = { user: null, aiMode: 'local-smart', aiModel: '', settings: { theme: '
 
 const isAdmin = () => S.user && S.user.role === 'Administrator';
 
-const TITLES = { home: ['Home', 'AI Assistance Interview System · WPU Main Campus'], dashboard: ['Dashboard', 'System overview & activity'], create: ['Create Interview', 'Start a new stakeholder interview'], my: ['My Interviews', 'Answer questions & manage interviews'], bank: ['Questions Bank', 'Search, filter & manage questions'], results: ['Results & Suggestions', 'Patterns, insights & graph line analysis'], history: ['History', 'All saved interviews'], report: ['Summary Report', 'Cards per interview + printable report'], profile: ['Profile', 'Account information'], users: ['Accounts', 'Manage system users (Administrator)'], settings: ['Settings', 'Theme, preferences & AI configuration'] };
-const MENU = [['home', '🏠', 'Home'], ['dashboard', '📊', 'Dashboard'], ['create', '➕', 'Create Interview'], ['my', '🎙', 'My Interviews'], ['bank', '📚', 'Questions Bank'], ['results', '💡', 'Results & Suggestions'], ['history', '🕘', 'History'], ['report', '📄', 'Summary Report'], ['profile', '👤', 'Profile'], ['users', '👥', 'Accounts'], ['settings', '⚙', 'Settings']];
+const TITLES = { home: ['Home', 'AI Assistance Interview System · WPU Main Campus'], dashboard: ['Dashboard', 'System overview & activity'], create: ['Create Interview', 'Start a new stakeholder interview'], my: ['My Interviews', 'Answer questions & manage interviews'], bank: ['Questions Bank', 'Search, filter & manage questions'], results: ['Results & Suggestions', 'Patterns, insights & graph line analysis'], history: ['History', 'All saved interviews'], report: ['Summary Report', 'Cards per interview + printable report'], survey: ['QR Survey Setup', 'QR code entry + stakeholder topics for field surveys'], analytics: ['Survey Analytics', 'Public 1-5 scale ratings (also open at /public/dashboard)'], profile: ['Profile', 'Account information'], users: ['Accounts', 'Manage system users (Administrator)'], settings: ['Settings', 'Theme, preferences & AI configuration'] };
+const MENU = [['home', '🏠', 'Home'], ['dashboard', '📊', 'Dashboard'], ['create', '➕', 'Create Interview'], ['my', '🎙', 'My Interviews'], ['bank', '📚', 'Questions Bank'], ['results', '💡', 'Results & Suggestions'], ['history', '🕘', 'History'], ['report', '📄', 'Summary Report'], ['survey', '📱', 'QR Survey Setup'], ['analytics', '⭐', 'Survey Analytics'], ['profile', '👤', 'Profile'], ['users', '👥', 'Accounts'], ['settings', '⚙', 'Settings']];
 
 /* ---------- tiny helpers ---------- */
 function toast(msg, type) {
@@ -143,7 +143,8 @@ function showApp() {
   renderNav();
 }
 function renderNav() {
-  const items = MENU.filter(m => m[0] !== 'users' || isAdmin());
+  // QR Survey Setup (topic CRUD) is admin-only; analytics visible to all logged-in users.
+  const items = MENU.filter(m => (m[0] !== 'users' && m[0] !== 'survey') || isAdmin());
   $('#sideNav').innerHTML = items.map(m =>
     '<button class="side-link' + (S.route === m[0] ? ' active' : '') + '" data-r="' + m[0] + '"><span class="ic">' + m[1] + '</span>' + m[2] + '</button>').join('')
     + '<button class="side-link" id="navLogout"><span class="ic">🚪</span>Logout</button>';
@@ -171,6 +172,9 @@ function applySiteLogo() {
 }
 function destroyCharts() { S.charts.forEach(c => { try { c.destroy(); } catch {} }); S.charts = []; if (S.sliderT) { clearInterval(S.sliderT); S.sliderT = null; } }
 function go(route, param) {
+  if (!S.user) { showLogin(); return; }
+  // Frontend guard (backend also enforces requireAdmin): non-admins get analytics instead.
+  if (route === 'survey' && !isAdmin()) { toast('Administrator access required.', 'error'); route = 'analytics'; }
   if (S.qa.dirty && S.route === 'my' && route !== 'my') {
     modal('<h3>Unsaved answer?</h3><p>You have an unsaved answer. Leave without saving?</p><div class="modal-actions"><button class="btn btn-ghost" id="mCancel">Stay</button><button class="btn btn-primary" id="mOk">Leave</button></div>');
     $('#mCancel').onclick = closeModal;
@@ -182,7 +186,7 @@ function go(route, param) {
   $('#pageTitle').textContent = (TITLES[route] || TITLES.home)[0];
   $('#pageSub').textContent = (TITLES[route] || TITLES.home)[1];
   renderNav();
-  ({ home: pHome, dashboard: pDashboard, create: pCreate, my: pMy, bank: pBank, results: pResults, history: pHistory, report: pReport, profile: pProfile, users: pUsers, settings: pSettings })[route](param);
+  ({ home: pHome, dashboard: pDashboard, create: pCreate, my: pMy, bank: pBank, results: pResults, history: pHistory, report: pReport, survey: pSurveySetup, analytics: pAnalytics, profile: pProfile, users: pUsers, settings: pSettings })[route](param);
 }
 /* ---------- theme (night / light, always readable) ---------- */
 function applyTheme(t) {
@@ -283,7 +287,7 @@ function pHome() {
     '<div class="hero"><span class="hero-kicker">🎓 Western Philippines University · Main Campus</span>'
     + '<h2>AI Assistance Interview System</h2>'
     + '<p>Conduct stakeholder interviews faster: generate smart questions, capture answers, uncover pain points with graph-line insights, and print professional summary reports — all in one place.</p>'
-    + '<div class="hero-cta no-print"><button class="btn btn-light" id="hStart">➕ Start New Interview</button><button class="btn btn-outline-w" id="hHow">▶ How it works</button><button class="btn btn-outline-w" id="hDash">📊 Go to Dashboard</button></div>'
+    + '<div class="hero-cta no-print"><button class="btn btn-light" id="hStart">➕ Start New Interview</button><button class="btn btn-outline-w" id="hField">📱 Field Survey (QR / Offline)</button><button class="btn btn-outline-w" id="hDash">📊 Go to Dashboard</button></div>'
     + '<div class="hero-badges"><span>🧠 Built-in Smart AI</span><span>🌙 Night / ☀️ Light mode</span><span>📈 Line-graph insights</span><span>🖨️ One-click print</span></div></div>'
     + '<div class="slider no-print" id="slider">' + slides.map((s, i) => '<div class="slide' + (i === 0 ? ' on' : '') + '"><div class="slide-art ' + s[0] + '"><span class="orb" style="width:90px;height:90px;left:12%;top:18%"></span><span class="orb" style="width:50px;height:50px;right:16%;top:30%;animation-delay:1s"></span><span class="orb" style="width:70px;height:70px;left:40%;bottom:20%;animation-delay:2s"></span><div style="font-size:64px;z-index:2">' + s[1] + '</div><small>✨ AI-generated visual · ' + esc(s[2]) + '</small></div><div class="slide-body"><h3>' + esc(s[2]) + '</h3><p>' + esc(s[3]) + '</p><button class="btn btn-primary btn-sm" data-go="create">Try it now →</button></div></div>').join('') + '<div class="slide-dots" id="sDots">' + slides.map((_, i) => '<i data-i="' + i + '" class="' + (i === 0 ? 'on' : '') + '"></i>').join('') + '</div></div>'
     + '<div class="card" id="howSec" style="margin-top:18px"><h3>How AI interview works</h3><p class="sub">Four simple steps from idea to printable insight.</p><div class="how-grid">'
@@ -293,7 +297,7 @@ function pHome() {
     + [['🎯', 'linear-gradient(135deg,#3b6ef6,#6366f1)', 'Always relevant questions', 'Adapts to ANY title — enrollment, hospital, library, retail…'], ['⏱️', 'linear-gradient(135deg,#059669,#34d399)', 'Saves hours', 'No manual questionnaires; answers auto-track date & time.'], ['🔍', 'linear-gradient(135deg,#d97706,#f59e0b)', 'Finds real pain points', 'Line-graph trends + AI key findings reveal bottlenecks.'], ['🖨️', 'linear-gradient(135deg,#7c3aed,#ec4899)', 'Ready to submit', 'Clean printable report with WPU Main Campus header.']].map(b => '<div class="benefit"><div class="ic" style="background:' + b[1] + '">' + b[0] + '</div><div><b>' + b[2] + '</b><br><small style="color:var(--muted)">' + b[3] + '</small></div></div>').join('')
     + '</div><div class="card"><h3>Live snapshot</h3><p class="sub">Your current progress at a glance.</p><div id="homeStats">' + skel(1) + '</div><div class="uni-banner"><div style="font-size:30px">🎓</div><div><b>Western Philippines University · Main Campus</b><br><small>AI Assistance Interview System — stakeholder research, digitized.</small></div></div></div></div>';
   $('#hStart').onclick = () => go('create');
-  $('#hHow').onclick = () => $('#howSec').scrollIntoView({ behavior: 'smooth' });
+  $('#hField').onclick = () => window.open('/survey', '_blank');
   $('#hDash').onclick = () => go('dashboard');
   $$('#view [data-go]').forEach(b => b.onclick = () => go(b.dataset.go));
   let idx = 0;
@@ -780,7 +784,62 @@ async function pReport(selId, scope) {
     const sp2 = $('#sPrint2'); if (sp2) sp2.onclick = () => doPrint('Summary report — ' + iv.title);
   } catch (e) { view().innerHTML = '<div class="alert alert-error">' + esc(e.message) + '</div>'; }
 }
-/* ---------- profile ---------- */
+/* ---------- QR survey setup (STEP 2: admin QR + topics) ---------- */
+async function pSurveySetup() {
+  view().innerHTML = skel(2);
+  try {
+    const topicsJ = await api('/api/admin/topics').catch(() => ({ topics: [] }));
+    const rolesJ = await api('/api/survey/roles').catch(() => ({ roles: ['Farmer', 'Vendor', 'Resident'] }));
+    const topics = topicsJ.topics || [];
+    const roles = rolesJ.roles || [];
+    const base = location.origin;
+    const qr = (url) => 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(url);
+    view().innerHTML = '<div class="grid g2">'
+      + '<div class="card"><h3>📱 QR Code — Field Survey Entry</h3>'
+      + '<p class="sub">I-scan ng respondent → bubukas ang /survey at auto-select ang role.</p>'
+      + '<label class="field"><span>Role para sa QR</span><select id="qrRole">' + roles.map(r => '<option>' + esc(r) + '</option>').join('') + '</select></label>'
+      + '<label class="field"><span>Wika</span><select id="qrLang"><option>Tagalog</option><option>English</option></select></label>'
+      + '<div style="text-align:center"><img id="qrImg" src="" alt="Survey QR" style="border:1px solid var(--line);border-radius:12px;max-width:100%"><br><small class="muted" id="qrUrl"></small>'
+      + '<br><div style="display:flex;gap:8px;justify-content:center;margin-top:8px;flex-wrap:wrap"><button class="btn btn-ghost btn-sm" id="qrCopy">📋 Kopyahin</button><button class="btn btn-ghost btn-sm" id="qrOpen">🔗 Buksan</button><button class="btn btn-ghost btn-sm" id="qrPrint">🖨 Print</button></div></div></div>'
+      + '<div class="card"><h3>🏷️ Stakeholder Topics</h3><p class="sub">Bawat role + wika → sariling paksa (auto-load sa survey).</p>'
+      + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"><input id="ntRole" placeholder="Role" style="flex:1;min-width:100px"><select id="ntLang"><option>Tagalog</option><option>English</option></select></div>'
+      + '<label class="field"><span>Topic</span><input id="ntTopic" placeholder="Paksa"></label>'
+      + '<button class="btn btn-primary btn-sm" id="ntAdd">➕ Idagdag</button>'
+      + '<div id="topicList" style="margin-top:10px">' + (topics.length ? topics.map(t => '<div style="display:flex;gap:8px;padding:7px 0;border-bottom:1px solid var(--line)"><div style="flex:1"><b>' + esc(t.stakeholder) + '</b> · ' + esc(t.language) + '<br><small class="muted">' + esc(t.topic) + '</small></div><button class="btn btn-ghost btn-sm" data-del="' + t.id + '">Del</button></div>').join('') : '<p class="muted">No topics yet.</p>') + '</div></div></div>';
+    const refreshQR = () => {
+      const url = base + '/survey?role=' + encodeURIComponent($('#qrRole').value) + '&lang=' + encodeURIComponent($('#qrLang').value);
+      $('#qrImg').src = qr(url); $('#qrUrl').textContent = url;
+    };
+    $('#qrRole').onchange = refreshQR; $('#qrLang').onchange = refreshQR; refreshQR();
+    $('#qrCopy').onclick = async () => { try { await navigator.clipboard.writeText($('#qrUrl').textContent); toast('QR link copied.'); } catch { toast('Copy failed.', 'warning'); } };
+    $('#qrOpen').onclick = () => window.open($('#qrUrl').textContent, '_blank');
+    $('#qrPrint').onclick = () => window.print();
+    $('#ntAdd').onclick = async () => {
+      try { await api('/api/admin/topics', { method: 'POST', body: JSON.stringify({ stakeholder: $('#ntRole').value, language: $('#ntLang').value, topic: $('#ntTopic').value }) }); toast('Topic added.'); pSurveySetup(); }
+      catch (e) { toast(e.message, 'error'); }
+    };
+    document.querySelectorAll('#topicList [data-del]').forEach(b => b.onclick = () => confirmDlg('Delete topic?', 'Remove this topic?', 'Delete', async () => { await api('/api/admin/topics/' + b.dataset.del, { method: 'DELETE' }); toast('Deleted.'); pSurveySetup(); }));
+  } catch (e) { view().innerHTML = '<div class="alert alert-error">' + esc(e.message) + '</div>'; }
+}
+/* ---------- survey analytics (logged-in mirror of /public/dashboard) ---------- */
+async function pAnalytics() {
+  view().innerHTML = skel(3);
+  try {
+    const j = await api('/api/public/analytics');
+    const a = j.analytics;
+    const C = { 5: '#059669', 4: '#16a34a', 3: '#d97706', 2: '#ea580c', 1: '#dc2626' };
+    const mx = Math.max(1, ...Object.values(a.distribution));
+    view().innerHTML = '<div class="grid g5">'
+      + [['Total AI reports', a.total], ['Average score', a.average + ' / 5'], ['⭐ 5 (Very High)', a.distribution[5] || 0], ['⚠ 1 (Very Low)', a.distribution[1] || 0], ['Responses', j.responses.length]].map(k => '<div class="stat"><small>' + k[0] + '</small><b>' + k[1] + '</b></div>').join('') + '</div>'
+      + '<div class="card"><h3>⭐ Score distribution (1–5)</h3><div style="display:flex;gap:8px;align-items:flex-end;height:150px">'
+      + [5, 4, 3, 2, 1].map(s => '<div style="flex:1;text-align:center"><div style="height:' + Math.round(a.distribution[s] / mx * 120) + 'px;background:' + C[s] + ';border-radius:8px 8px 0 0;min-height:6px"></div><b>' + s + '</b><div><small>' + a.distribution[s] + '</small></div></div>').join('')
+      + '</div><p class="sub">5-Very High · 4-High · 3-Moderate · 2-Low · 1-Very Low</p>'
+      + '<div>' + (a.byStakeholder.map(x => '<span class="insight-tag">' + esc(x.stakeholder) + ': ' + x.average + ' ⭐ (' + x.count + ')</span>').join('') || '<span class="muted">No data yet.</span>') + '</div>'
+      + '<p><a href="/public/dashboard" target="_blank">🔗 Public dashboard (kahit naka-logout) →</a></p></div>'
+      + '<div class="card"><h3>Latest AI reports</h3>' + (a.latest.length ? a.latest.map(r => '<div style="padding:9px 0;border-bottom:1px solid var(--line)"><span class="chip" style="background:' + C[r.score] + ';color:#fff">' + r.score + '/5 · ' + esc(r.level) + '</span> <b>' + esc(r.topic) + '</b> <small class="muted">· ' + esc(r.stakeholder) + ' · ' + esc(r.language) + '</small></div>').join('') : '<div class="empty"><p>No reports yet.</p></div>') + '</div>';
+  } catch (e) { view().innerHTML = '<div class="alert alert-error">' + esc(e.message) + '</div>'; }
+}
+/* ---------- profile (restored) ---------- */
 async function pProfile() {
   view().innerHTML = skel(2);
   try {

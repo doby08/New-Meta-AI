@@ -1,5 +1,6 @@
 /* Persistent JSON database (file-backed, survives restarts).
-   Tables: users, interviews, questions, suggestions, settings */
+   Tables: users, interviews, questions, suggestions, settings,
+           site, stakeholder_topics, survey_responses, ai_reports, sync_queue */
 const fs = require('fs');
 const path = require('path');
 const bcrypt = require('bcryptjs');
@@ -8,7 +9,7 @@ const DATA_DIR = path.join(__dirname, 'data');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
 let DB = null;
 
-const emptyDb = () => ({ users: [], interviews: [], questions: [], suggestions: [], settings: {}, site: {}, seq: 1 });
+const emptyDb = () => ({ users: [], interviews: [], questions: [], suggestions: [], settings: {}, site: {}, stakeholder_topics: [], survey_responses: [], ai_reports: [], sync_queue: [], seq: 1 });
 const now = () => new Date().toISOString();
 const dayOf = (iso) => String(iso || '').slice(0, 10);
 const defaultSettings = () => ({ accent: 'blue', theme: 'light', itemsPerPage: 8, defaultQuestionCount: 20, aiModel: 'gpt-4o-mini', notifications: true, compact: false });
@@ -35,6 +36,7 @@ async function initDb() {
   }
   if (!DB.settings[admin.id]) DB.settings[admin.id] = defaultSettings();
   seedSample(admin.id);
+  seedTopics();
   persist();
   return admin;
 }
@@ -185,6 +187,52 @@ function bankQuestions(userId, o) {
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .map(q => ({ ...q, interviewTitle: titles[q.interviewId] || '(deleted)' }));
 }
+/* ---------- STEP 1: Stakeholder Topics (QR entry + role filtering) ---------- */
+const listTopics = (filter) => {
+  filter = filter || {};
+  return DB.stakeholder_topics.filter(t =>
+    (!filter.stakeholder || t.stakeholder === filter.stakeholder) &&
+    (!filter.language || t.language === filter.language) &&
+    (!filter.activeOnly || t.active !== false)
+  ).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+};
+const getTopic = (id) => DB.stakeholder_topics.find(t => t.id === id) || null;
+function upsertTopic(item) {
+  const c = (v, n) => String(v === undefined || v === null ? '' : v).slice(0, n || 500);
+  if (item.id) {
+    const t = getTopic(item.id); if (!t) return null;
+    if (item.stakeholder !== undefined) t.stakeholder = c(item.stakeholder, 120);
+    if (item.language !== undefined) t.language = ['Tagalog', 'English'].includes(item.language) ? item.language : t.language;
+    if (item.topic !== undefined) t.topic = c(item.topic, 300);
+    if (item.description !== undefined) t.description = c(item.description, 2000);
+    if (item.active !== undefined) t.active = Boolean(item.active);
+    if (item.sortOrder !== undefined) t.sortOrder = parseInt(item.sortOrder) || 0;
+    t.updatedAt = now(); persist(); return t;
+  }
+  const t = { id: uid('tp'), stakeholder: c(item.stakeholder, 120) || 'General' };
+  t.language = ['Tagalog', 'English'].includes(item.language) ? item.language : 'Tagalog';
+  t.topic = c(item.topic, 300) || 'General Survey';
+  t.description = c(item.description, 2000); t.active = item.active === undefined ? true : Boolean(item.active);
+  t.sortOrder = parseInt(item.sortOrder) || 0; t.createdAt = now(); t.updatedAt = now();
+  DB.stakeholder_topics.push(t); persist(); return t;
+}
+function deleteTopic(id) {
+  const ix = DB.stakeholder_topics.findIndex(t => t.id === id);
+  if (ix < 0) return false;
+  DB.stakeholder_topics.splice(ix, 1); persist(); return true;
+}
+function seedTopics() {
+  if (DB.stakeholder_topics.length > 0) return;
+  const seed = [
+    ['Farmer', 'Tagalog', 'Programang Pang-Agrikultura at Suporta sa Magsasaka', 'Survey ukol sa binhi, patubig, at ayuda.', 1],
+    ['Farmer', 'English', 'Agricultural Programs and Farmer Support', 'Survey on seeds, irrigation, and subsidies.', 2],
+    ['Vendor', 'Tagalog', 'Kondisyon ng Pamilihan at Puhunan ng Vendor', 'Survey ukol sa pwesto, renta, at benta.', 3],
+    ['Vendor', 'English', 'Market Conditions and Vendor Capital', 'Survey on stalls, rent, and daily sales.', 4],
+    ['Resident', 'Tagalog', 'Serbisyong Barangay at Kalinisan', 'Survey ukol sa basura, tubig, at serbisyo.', 5],
+    ['Resident', 'English', 'Barangay Services and Sanitation', 'Survey on waste, water, and services.', 6]
+  ];
+  seed.forEach(s => DB.stakeholder_topics.push({ id: uid('tp'), stakeholder: s[0], language: s[1], topic: s[2], description: s[3], sortOrder: s[4], active: true, createdAt: now(), updatedAt: now() }));
+}
 const getSuggestion = (userId, interviewId) => {
   if (!getInterview(userId, interviewId)) return undefined;
   const rows = DB.suggestions.filter(s => s.interviewId === interviewId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -194,6 +242,79 @@ function saveSuggestion(userId, interviewId, data, source) {
   if (!getInterview(userId, interviewId)) return null;
   const row = { id: uid('s'), interviewId, ...data, source, createdAt: now() };
   DB.suggestions.push(row); persist(); return row;
+}
+/* ---------- STEP 1: survey_responses (offline-first records) ---------- */
+const listSurveyResponses = (f) => {
+  f = f || {};
+  return DB.survey_responses.filter(r =>
+    (!f.stakeholder || r.stakeholder === f.stakeholder) &&
+    (!f.language || r.language === f.language)).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+};
+const getSurveyResponse = (id) => DB.survey_responses.find(r => r.id === id) || null;
+function saveSurveyResponse(item) {
+  const c = (v, n) => String(v === undefined || v === null ? '' : v).slice(0, n || 5000);
+  const row = {
+    id: item.clientId || uid('sr'),
+    stakeholder: c(item.stakeholder, 120) || 'General',
+    topic: c(item.topic, 300) || 'General Survey', topicId: item.topicId || null,
+    answers: Array.isArray(item.answers) ? item.answers.slice(0, 50).map(a => ({ question: c(a.question, 2000), answer: c(a.answer, 8000) })) : [],
+    deviceLabel: c(item.deviceLabel, 200),
+    syncedAt: now(), createdAt: item.createdAt || now(), updatedAt: now()
+  };
+  row.language = ['Tagalog', 'English'].includes(item.language) ? item.language : 'Tagalog';
+  const ix = DB.survey_responses.findIndex(r => r.id === row.id);
+  if (ix >= 0) DB.survey_responses[ix] = { ...DB.survey_responses[ix], ...row };
+  else DB.survey_responses.push(row);
+  persist(); return row;
+}
+/* ---------- STEP 1: ai_reports (1-5 scale) ---------- */
+const SCALE_META = {
+  5: { level: 'Very High', en: 'Highly positive, critical needs fully met.', tl: 'Napakapositibo — ganap na natugunan ang pangunahing pangangailangan.' },
+  4: { level: 'High', en: 'Positive outcome, minor adjustments needed.', tl: 'Positibo — kaunting pag-aayos na lang ang kailangan.' },
+  3: { level: 'Moderate', en: 'Neutral/average condition, standard monitoring required.', tl: 'Katamtaman — kailangan ng regular na pag-monitor.' },
+  2: { level: 'Low', en: 'Requires intervention, significant friction identified.', tl: 'Mababa — kailangan ng interbensyon, may malaking balakid.' },
+  1: { level: 'Very Low', en: 'Urgent action needed, severe blockers.', tl: 'Napakababa — kailangan ng agarang aksyon.' }
+};
+const listReports = (f) => {
+  f = f || {};
+  return DB.ai_reports.filter(r =>
+    (!f.stakeholder || r.stakeholder === f.stakeholder) &&
+    (!f.language || r.language === f.language)).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+};
+const getReport = (id) => DB.ai_reports.find(r => r.id === id) || null;
+const getReportByResponse = (rid) => DB.ai_reports.filter(r => r.responseId === rid).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] || null;
+function saveReport(item) {
+  const score = Math.max(1, Math.min(5, parseInt(item.score) || 3));
+  const c = (v, n) => String(v === undefined || v === null ? '' : v).slice(0, n || 5000);
+  const lang = ['Tagalog', 'English'].includes(item.language) ? item.language : 'Tagalog';
+  const row = {
+    id: uid('rp'), responseId: item.responseId || null,
+    stakeholder: c(item.stakeholder, 120) || 'General', language: lang,
+    topic: c(item.topic, 300) || 'General Survey', score,
+    level: item.level || SCALE_META[score].level,
+    summary: c(item.summary, 5000),
+    meaning: c(item.meaning, 5000) || (lang === 'Tagalog' ? SCALE_META[score].tl : SCALE_META[score].en),
+    recommendations: Array.isArray(item.recommendations) ? item.recommendations.map(r => c(r, 2000)).slice(0, 10) : [],
+    engine: c(item.engine, 60) || 'local-smart', createdAt: now()
+  };
+  DB.ai_reports.push(row); persist(); return row;
+}
+function reportAggregates(f) {
+  const rows = listReports(f);
+  const dist = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  const bySt = {}; let sum = 0;
+  rows.forEach(r => { dist[r.score] = (dist[r.score] || 0) + 1; sum += r.score; });
+  rows.forEach(r => {
+    const k = r.stakeholder || 'General';
+    if (!bySt[k]) bySt[k] = { stakeholder: k, count: 0, sum: 0 };
+    bySt[k].count++; bySt[k].sum += r.score;
+  });
+  return {
+    total: rows.length, average: rows.length ? +(sum / rows.length).toFixed(2) : 0,
+    distribution: dist,
+    byStakeholder: Object.values(bySt).map(x => ({ stakeholder: x.stakeholder, count: x.count, average: +(x.sum / x.count).toFixed(2) })),
+    latest: rows.slice(0, 20)
+  };
 }
 function stats(userId) {
   const ivs = userId ? DB.interviews.filter(i => i.userId === userId) : DB.interviews.slice();
@@ -221,4 +342,4 @@ function stats(userId) {
   };
 }
 
-module.exports = { initDb, persist, now, findUserByName, findUserByLogin, getUserById, safeUser, createUser, listUsers, updateUser, deleteUser, getSite, saveSite, getSettings, saveSettings, listInterviews, getInterview, withCounts, createInterview, updateInterview, deleteInterview, listQuestions, addQuestions, addQuestion, getQuestion, updateQuestion, deleteQuestion, saveAnswer, bankQuestions, getSuggestion, saveSuggestion, stats };
+module.exports = { initDb, persist, now, SCALE_META, findUserByName, findUserByLogin, getUserById, safeUser, createUser, listUsers, updateUser, deleteUser, getSite, saveSite, getSettings, saveSettings, listInterviews, getInterview, withCounts, createInterview, updateInterview, deleteInterview, listQuestions, addQuestions, addQuestion, getQuestion, updateQuestion, deleteQuestion, saveAnswer, bankQuestions, getSuggestion, saveSuggestion, stats, listTopics, getTopic, upsertTopic, deleteTopic, listSurveyResponses, getSurveyResponse, saveSurveyResponse, listReports, getReport, getReportByResponse, saveReport, reportAggregates };
