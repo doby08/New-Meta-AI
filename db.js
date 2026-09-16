@@ -1,6 +1,7 @@
 /* Persistent JSON database (file-backed, survives restarts).
    Tables: users, interviews, questions, suggestions, settings,
-           site, stakeholder_topics, survey_responses, ai_reports, sync_queue */
+           site, stakeholder_topics, survey_responses, ai_reports, sync_queue,
+           question_bank, interview_sessions, sentiment_cache */
 const fs = require('fs');
 const path = require('path');
 const bcrypt = require('bcryptjs');
@@ -9,7 +10,7 @@ const DATA_DIR = path.join(__dirname, 'data');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
 let DB = null;
 
-const emptyDb = () => ({ users: [], interviews: [], questions: [], suggestions: [], settings: {}, site: {}, stakeholder_topics: [], survey_responses: [], ai_reports: [], sync_queue: [], seq: 1 });
+const emptyDb = () => ({ users: [], interviews: [], questions: [], suggestions: [], settings: {}, site: {}, stakeholder_topics: [], survey_responses: [], ai_reports: [], sync_queue: [], question_bank: [], interview_sessions: [], sentiment_cache: [], seq: 1 });
 const now = () => new Date().toISOString();
 const dayOf = (iso) => String(iso || '').slice(0, 10);
 const defaultSettings = () => ({ accent: 'blue', theme: 'light', itemsPerPage: 8, defaultQuestionCount: 20, aiModel: 'gpt-4o-mini', notifications: true, compact: false });
