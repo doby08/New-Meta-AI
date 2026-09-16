@@ -8,6 +8,76 @@ const S = { user: null, aiMode: 'local-smart', aiModel: '', settings: { theme: '
 
 const isAdmin = () => S.user && S.user.role === 'Administrator';
 
+/* ---------- create-interview language (EN default) ---------- */
+const CREATE_I18N = {
+  EN: {
+    pageTitle: 'Create Interview', pageSub: 'Start a new stakeholder interview',
+    cardTitle: 'New interview', cardSub: 'Enter any project title and stakeholders — the AI adapts to whatever you type.',
+    title: 'Interview title *', titlePh: 'e.g. Web-Based Enrollment System',
+    type: 'Interview type', typeOpts: ['Requirements Gathering', 'Feedback Review', 'Problem Discovery', 'User Research', 'System Evaluation', 'General'],
+    method: 'Interview Method *', methodOpts: ['Structured', 'Semi-Structured', 'Unstructured'],
+    format: 'Interview Format *', formatOpts: ['Individual Interview', 'Group Interview'],
+    desc: 'Description', descPh: 'Purpose and background...',
+    stakeholders: 'Stakeholders *', stakeholdersPh: 'e.g. Students, Registrar, Teachers, IT Staff',
+    interviewee: 'Interviewee', intervieweePh: 'Person interviewed (optional)',
+    date: 'Date', count: 'How many AI questions? (max 50)',
+    back: 'Back', submit: 'Save interview & generate questions'
+  },
+  TL: {
+    pageTitle: 'Gumawa ng Panayam', pageSub: 'Magsimula ng bagong panayam sa stakeholder',
+    cardTitle: 'Bagong panayam', cardSub: 'Ilagay ang pamagat ng proyekto at mga stakeholder — mag-a-adapt ang AI sa anumang i-type mo.',
+    title: 'Pamagat ng Panayam *', titlePh: 'hal. Web-Based Enrollment System',
+    type: 'Uri ng Panayam', typeOpts: ['Paglikom ng mga Pangangailangan', 'Pagsusuri ng Feedback', 'Pagtuklas ng Problema', 'Pananaliksik sa User', 'Pagsusuri ng Sistema', 'Pangkalahatan'],
+    method: 'Pamamaraan ng Panayam *', methodOpts: ['Estrukturado', 'Semi-Estrukturado', 'Di-Estrukturado'],
+    format: 'Pormat ng Panayam *', formatOpts: ['Bawat Indibidwal na Panayam', 'Panayam ng Grupo'],
+    desc: 'Paglalarawan', descPh: 'Layunin at background...',
+    stakeholders: 'Mga Stakeholder *', stakeholdersPh: 'hal. Mag-aaral, Rehistrador, Guro, IT Staff',
+    interviewee: 'Kinapanayam', intervieweePh: 'Taong kinapanayam (opsyonal)',
+    date: 'Petsa', count: 'Ilang tanong mula sa AI? (pinakamarami 50)',
+    back: 'Bumalik', submit: 'I-save ang panayam at gumawa ng mga tanong'
+  }
+};
+S.createLang = S.createLang || 'EN';
+const tCreate = () => CREATE_I18N[S.createLang] || CREATE_I18N.EN;
+/* Re-render only the labels/placeholders (keeps typed values). */
+function applyCreateLang() {
+  const t = tCreate();
+  const q = (s) => document.querySelector(s);
+  if (S.route === 'create') {
+    if (q('#pageTitle')) q('#pageTitle').textContent = t.pageTitle;
+    if (q('#pageSub')) q('#pageSub').textContent = t.pageSub;
+  }
+  if (q('#ciCardTitle')) q('#ciCardTitle').textContent = t.cardTitle;
+  if (q('#ciCardSub')) q('#ciCardSub').textContent = t.cardSub;
+  if (q('#ciTitleLbl')) q('#ciTitleLbl').textContent = t.title;
+  if (q('#fTitle')) q('#fTitle').placeholder = t.titlePh;
+  if (q('#ciTypeLbl')) q('#ciTypeLbl').textContent = t.type;
+  if (q('#ciMethodLbl')) q('#ciMethodLbl').textContent = t.method;
+  if (q('#ciFormatLbl')) q('#ciFormatLbl').textContent = t.format;
+  if (q('#ciDescLbl')) q('#ciDescLbl').textContent = t.desc;
+  if (q('#fDesc')) q('#fDesc').placeholder = t.descPh;
+  if (q('#ciShLbl')) q('#ciShLbl').textContent = t.stakeholders;
+  if (q('#fSh')) q('#fSh').placeholder = t.stakeholdersPh;
+  if (q('#ciPersonLbl')) q('#ciPersonLbl').textContent = t.interviewee;
+  if (q('#fWho')) q('#fWho').placeholder = t.intervieweePh;
+  if (q('#ciDateLbl')) q('#ciDateLbl').textContent = t.date;
+  if (q('#ciCountLbl')) q('#ciCountLbl').textContent = t.count;
+  /* Dropdown options — re-render ALL options from the dictionary (Submit uses the
+     selected INDEX, so translated values never corrupt saved English data). */
+  const fill = (sel, arr) => {
+    const el = q(sel); if (!el) return;
+    const keep = el.selectedIndex >= 0 ? el.selectedIndex : 0;
+    el.innerHTML = arr.map(o => '<option>' + esc(o) + '</option>').join('');
+    el.selectedIndex = Math.min(keep, arr.length - 1);
+  };
+  fill('#fType', t.typeOpts); fill('#fMethod', t.methodOpts); fill('#fFormat', t.formatOpts);
+  if (q('#ciBackBtn')) q('#ciBackBtn').textContent = '← ' + t.back;
+  const sb = q('#ciSaveBtn .btn-label'); if (sb) sb.textContent = t.submit;
+  const tl = q('#ciLangTl'), en = q('#ciLangEn');
+  if (tl) tl.classList.toggle('on', S.createLang === 'TL');
+  if (en) en.classList.toggle('on', S.createLang === 'EN');
+}
+
 const TITLES = { home: ['Home', 'AI Assistance Interview System · WPU Main Campus'], dashboard: ['Dashboard', 'System overview & activity'], create: ['Create Interview', 'Start a new stakeholder interview'], my: ['My Interviews', 'Answer questions & manage interviews'], bank: ['Questions Bank', 'Search, filter & manage questions'], results: ['Results & Suggestions', 'Patterns, insights & graph line analysis'], history: ['History', 'All saved interviews'], report: ['Summary Report', 'Cards per interview + printable report'], survey: ['QR Survey Setup', 'QR code entry + stakeholder topics for field surveys'], analytics: ['Survey Analytics', 'Public 1-5 scale ratings (also open at /public/dashboard)'], profile: ['Profile', 'Account information'], users: ['Accounts', 'Manage system users (Administrator)'], settings: ['Settings', 'Theme, preferences & AI configuration'] };
 const MENU = [['home', '🏠', 'Home'], ['dashboard', '📊', 'Dashboard'], ['create', '➕', 'Create Interview'], ['my', '🎙', 'My Interviews'], ['bank', '📚', 'Questions Bank'], ['results', '💡', 'Results & Suggestions'], ['history', '🕘', 'History'], ['report', '📄', 'Summary Report'], ['survey', '📱', 'QR Survey Setup'], ['analytics', '⭐', 'Survey Analytics'], ['profile', '👤', 'Profile'], ['users', '👥', 'Accounts'], ['settings', '⚙', 'Settings']];
 
@@ -358,20 +428,26 @@ function drawChart(series) {
 }
 /* ---------- create interview ---------- */
 function pCreate() {
-  view().innerHTML = '<div class="card"><h3>New interview</h3><p class="sub">Enter any project title and stakeholders — the AI adapts to whatever you type.</p>'
-    + '<div class="grid g2"><label class="field"><span>Interview title *</span><input id="fTitle" placeholder="e.g. Web-Based Enrollment System"></label>'
-    + '<label class="field"><span>Interview type</span><select id="fType"><option>Requirements Gathering</option><option>Feedback Review</option><option>Problem Discovery</option><option>User Research</option><option>System Evaluation</option><option>General</option></select></label></div>'
-    + '<div class="grid g2"><label class="field"><span>Interview Method *</span><select id="fMethod"><option>Structured</option><option>Semi-Structured</option><option>Unstructured</option></select></label>'
-    + '<label class="field"><span>Interview Format *</span><select id="fFormat"><option>Individual Interview</option><option>Group Interview</option></select></label></div>'
-    + '<label class="field"><span>Description</span><textarea id="fDesc" style="min-height:80px" placeholder="Purpose and background…"></textarea></label>'
-    + '<label class="field"><span>Stakeholders *</span><input id="fSh" placeholder="e.g. Students, Registrar, Teachers, IT Staff"></label>'
-    + '<div class="grid g2"><label class="field"><span>Interviewee</span><input id="fWho" placeholder="Person interviewed (optional)"></label>'
-    + '<label class="field"><span>Date</span><input id="fDate" type="date" value="' + new Date().toISOString().slice(0, 10) + '"></label></div>'
-    + '<label class="field"><span>How many AI questions? (max 50)</span><input id="fCount" type="number" min="5" max="50" value="' + (S.settings.defaultQuestionCount || 20) + '"></label>'
-    + '<div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn btn-ghost" id="bBack">Back</button>'
-    + '<button class="btn btn-primary" id="bSave" style="flex:1">Save interview & generate questions</button></div></div>';
-  $('#bBack').onclick = () => go('dashboard');
-  $('#bSave').onclick = async (e) => {
+  const t = tCreate();
+  view().innerHTML = '<div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">'
+    + '<div><h3 id="ciCardTitle" style="margin:0">' + esc(t.cardTitle) + '</h3><p class="sub" id="ciCardSub">' + esc(t.cardSub) + '</p></div>'
+    + '<div class="lang-toggle" style="margin:0;min-width:190px" role="group" aria-label="Language / Wika"><button type="button" id="ciLangEn" class="' + (S.createLang === 'EN' ? 'on' : '') + '">🇬🇧 English</button><button type="button" id="ciLangTl" class="' + (S.createLang === 'TL' ? 'on' : '') + '">🇵🇭 Tagalog</button></div></div>'
+    + '<div class="grid g2"><label class="field"><span id="ciTitleLbl">' + esc(t.title) + '</span><input id="fTitle" placeholder="' + esc(t.titlePh) + '"></label>'
+    + '<div class="grid g2"><label class="field"><span id="ciTypeLbl">' + esc(t.type) + '</span><select id="fType">' + t.typeOpts.map(function(o){ return '<option>' + esc(o) + '</option>'; }).join('') + '</select></label></div>'
+    + '<div class="grid g2"><label class="field"><span id="ciMethodLbl">' + esc(t.method) + '</span><select id="fMethod">' + t.methodOpts.map(function(o){ return '<option>' + esc(o) + '</option>'; }).join('') + '</select></label>'
+    + '<label class="field"><span id="ciFormatLbl">' + esc(t.format) + '</span><select id="fFormat">' + t.formatOpts.map(function(o){ return '<option>' + esc(o) + '</option>'; }).join('') + '</select></label></div>'
+    + '<label class="field"><span id="ciDescLbl">' + esc(t.desc) + '</span><textarea id="fDesc" style="min-height:80px" placeholder="' + esc(t.descPh) + '"></textarea></label>'
+    + '<label class="field"><span id="ciShLbl">' + esc(t.stakeholders) + '</span><input id="fSh" placeholder="' + esc(t.stakeholdersPh) + '"></label>'
+    + '<div class="grid g2"><label class="field"><span id="ciPersonLbl">' + esc(t.interviewee) + '</span><input id="fWho" placeholder="' + esc(t.intervieweePh) + '"></label>'
+    + '<label class="field"><span id="ciDateLbl">' + esc(t.date) + '</span><input id="fDate" type="date" value="' + new Date().toISOString().slice(0, 10) + '"></label></div>'
+    + '<label class="field"><span id="ciCountLbl">' + esc(t.count) + '</span><input id="fCount" type="number" min="5" max="50" value="' + (S.settings.defaultQuestionCount || 20) + '"></label>'
+    + '<div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn btn-ghost" id="ciBackBtn">← ' + esc(t.back) + '</button>'
+    + '<button class="btn btn-primary" id="ciSaveBtn" style="flex:1"><span class="btn-label">' + esc(t.submit) + '</span><span class="spinner hidden"></span></button></div></div>';
+  $('#ciLangEn').onclick = () => { S.createLang = 'EN'; applyCreateLang(); };
+  $('#ciLangTl').onclick = () => { S.createLang = 'TL'; applyCreateLang(); };
+  applyCreateLang();
+  $('#ciBackBtn').onclick = () => go('dashboard');
+  $('#ciSaveBtn').onclick = async (e) => {
     const title = $('#fTitle').value.trim(), sh = $('#fSh').value.trim();
     if (!title || !sh) { toast('Please complete all required fields.', 'error'); return; }
     const btn = e.currentTarget; btnLoading(btn, true, 'Saving interview…');
@@ -795,22 +871,35 @@ async function pSurveySetup() {
     const base = location.origin;
     const qr = (url) => 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(url);
     view().innerHTML = '<div class="grid g2">'
-      + '<div class="card"><h3>📱 QR Code — Field Survey Entry</h3>'
-      + '<p class="sub">I-scan ng respondent → bubukas ang /survey at auto-select ang role.</p>'
-      + '<label class="field"><span>Role para sa QR</span><select id="qrRole">' + roles.map(r => '<option>' + esc(r) + '</option>').join('') + '</select></label>'
-      + '<label class="field"><span>Wika</span><select id="qrLang"><option>Tagalog</option><option>English</option></select></label>'
-      + '<div style="text-align:center"><img id="qrImg" src="" alt="Survey QR" style="border:1px solid var(--line);border-radius:12px;max-width:100%"><br><small class="muted" id="qrUrl"></small>'
-      + '<br><div style="display:flex;gap:8px;justify-content:center;margin-top:8px;flex-wrap:wrap"><button class="btn btn-ghost btn-sm" id="qrCopy">📋 Kopyahin</button><button class="btn btn-ghost btn-sm" id="qrOpen">🔗 Buksan</button><button class="btn btn-ghost btn-sm" id="qrPrint">🖨 Print</button></div></div></div>'
+      + '<div class="card"><h3>📱 QR Code Setup & Generator</h3>'
+      + '<p class="sub">Bumuo ng QR na may Title + Category + Role. I-scan ng respondent → bubukas ang /survey na naka-lock ang context.</p>'
+      + '<label class="field"><span>Title (e.g. Harvesting Rambutan)</span><input id="qrTitle" placeholder="e.g. Harvesting Rambutan" value="Harvesting Rambutan"></label>'
+      + '<label class="field"><span>Stakeholder Category (e.g. Farmer)</span><select id="qrRole">' + roles.map(r => '<option>' + esc(r) + '</option>').join('') + '</select></label>'
+      + '<label class="field"><span>Role (e.g. Lead Field Worker)</span><input id="qrWorkerRole" placeholder="e.g. Lead Field Worker" value="Lead Field Worker"></label>'
+      + '<label class="field"><span>Wika / Language</span><select id="qrLang"><option>Tagalog</option><option>English</option></select></label>'
+      + '<button class="btn btn-primary btn-block" id="qrGen">⚡ Generate QR Code</button>'
+      + '<div id="qrOut" style="text-align:center;margin-top:10px"><img id="qrImg" src="" alt="Survey QR" style="border:1px solid var(--line);border-radius:12px;max-width:100%"><br><small class="muted" id="qrUrl" style="word-break:break-all"></small>'
+      + '<br><div style="display:flex;gap:8px;justify-content:center;margin-top:8px;flex-wrap:wrap"><button class="btn btn-ghost btn-sm" id="qrCopy">📋 Download / Copy Link</button><button class="btn btn-ghost btn-sm" id="qrOpen">🔗 Buksan</button><button class="btn btn-ghost btn-sm" id="qrPrint">🖨 Print QR Code</button></div></div></div>'
       + '<div class="card"><h3>🏷️ Stakeholder Topics</h3><p class="sub">Bawat role + wika → sariling paksa (auto-load sa survey).</p>'
       + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"><input id="ntRole" placeholder="Role" style="flex:1;min-width:100px"><select id="ntLang"><option>Tagalog</option><option>English</option></select></div>'
       + '<label class="field"><span>Topic</span><input id="ntTopic" placeholder="Paksa"></label>'
       + '<button class="btn btn-primary btn-sm" id="ntAdd">➕ Idagdag</button>'
       + '<div id="topicList" style="margin-top:10px">' + (topics.length ? topics.map(t => '<div style="display:flex;gap:8px;padding:7px 0;border-bottom:1px solid var(--line)"><div style="flex:1"><b>' + esc(t.stakeholder) + '</b> · ' + esc(t.language) + '<br><small class="muted">' + esc(t.topic) + '</small></div><button class="btn btn-ghost btn-sm" data-del="' + t.id + '">Del</button></div>').join('') : '<p class="muted">No topics yet.</p>') + '</div></div></div>';
+    const buildSurveyUrl = () => base + '/survey?title=' + encodeURIComponent(($('#qrTitle').value || '').trim())
+      + '&category=' + encodeURIComponent(($('#qrRole').value || '').trim())
+      + '&role=' + encodeURIComponent(($('#qrWorkerRole').value || '').trim())
+      + '&lang=' + encodeURIComponent($('#qrLang').value);
     const refreshQR = () => {
-      const url = base + '/survey?role=' + encodeURIComponent($('#qrRole').value) + '&lang=' + encodeURIComponent($('#qrLang').value);
+      const url = buildSurveyUrl();
       $('#qrImg').src = qr(url); $('#qrUrl').textContent = url;
     };
-    $('#qrRole').onchange = refreshQR; $('#qrLang').onchange = refreshQR; refreshQR();
+    $('#qrRole').onchange = refreshQR; $('#qrLang').onchange = refreshQR;
+    $('#qrTitle').oninput = refreshQR; $('#qrWorkerRole').oninput = refreshQR;
+    $('#qrGen').onclick = () => {
+      if (!($('#qrTitle').value || '').trim() || !($('#qrWorkerRole').value || '').trim()) { toast('Please enter a Title and Role first.', 'error'); return; }
+      refreshQR(); toast('QR code generated.');
+    };
+    refreshQR();
     $('#qrCopy').onclick = async () => { try { await navigator.clipboard.writeText($('#qrUrl').textContent); toast('QR link copied.'); } catch { toast('Copy failed.', 'warning'); } };
     $('#qrOpen').onclick = () => window.open($('#qrUrl').textContent, '_blank');
     $('#qrPrint').onclick = () => window.print();

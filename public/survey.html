@@ -16,6 +16,11 @@
 .role-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:10px 0}
 .role-grid button{border:2px solid var(--line);background:var(--card);border-radius:14px;padding:14px 8px;font-size:14px;font-weight:700;cursor:pointer;color:var(--ink)}
 .role-grid button.on{border-color:#3b6ef6;background:#eef2ff}
+.qr-badges{display:grid;grid-template-columns:1fr;gap:8px;margin:10px 0}
+.qr-badge{display:flex;gap:10px;align-items:center;background:var(--hint-bg);border:1px solid var(--hint-bd);border-radius:12px;padding:10px 12px;font-size:14px}
+.qr-badge .k{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);min-width:86px}
+.qr-badge .v{font-weight:700}
+.qr-badge .lock{margin-left:auto}
 .q-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin:10px 0}
 .q-card textarea{width:100%;min-height:74px;border:1px solid var(--line);border-radius:10px;padding:10px;font:inherit;background:var(--input);color:var(--ink)}
 #syncStatus{border-radius:12px;padding:10px 12px;font-size:13px;margin:10px 0;background:var(--hint-bg);border:1px solid var(--hint-bd);color:var(--hint-ink)}
@@ -31,18 +36,22 @@
   <div class="card">
     <div class="card-head"><div><h2 id="tTitle">📝 Stakeholder Survey</h2><p class="muted" id="tSub">Piliin ang wika at ang inyong kategorya.</p></div></div>
     <div id="syncStatus" data-mode="online">✅ Online — handa nang sumagot.</div>
-    <!-- STEP 1: Language Toggle Selector (Tagalog | English) -->
+    <!-- QR context (read-only badges when ?title=&category=&role= present) -->
+    <div id="qrCtx" class="qr-badges hidden"></div>
+    <!-- STEP 1: Language Toggle Selector (Tagalog | English) — always interactive -->
     <label class="field"><span id="tLang">Wika / Language</span>
       <div class="lang-toggle" role="tablist">
         <button type="button" id="langTl" class="on">🇵🇭 Tagalog</button>
         <button type="button" id="langEn">🇬🇧 English</button>
       </div>
     </label>
-    <!-- STEP 2: QR entry lands here (?role=Farmer) → Role Selection -->
+    <!-- STEP 2: QR entry lands here (?role=&category=&title=) → Role Selection (hidden when QR-locked) -->
+    <div id="manualCtx">
     <label class="field"><span id="tRole">Ano ang iyong Stakeholder Category?</span>
       <div class="role-grid" id="roleGrid"></div>
     </label>
     <label class="field"><span id="tTopic">Paksa / Topic</span><select id="topicSel"></select></label>
+    </div>
     <button class="btn btn-primary btn-block" id="startBtn"><span class="btn-label">▶ Simulan ang Interview</span><span class="spinner hidden"></span></button>
     <p class="login-hint" id="tQrHint">Na-scan ang QR? Awtomatikong napili ang inyong kategorya. Maaari pa rin itong palitan.</p>
   </div>
