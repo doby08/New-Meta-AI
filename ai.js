@@ -69,14 +69,18 @@ const DOMAIN = {
   default: { proc: ['daily workflow steps', 'record creation and updates', 'approvals and handoffs', 'reporting routines', 'client or user requests'], pain: ['manual paperwork', 'data errors', 'slow approvals', 'duplicate encoding'], rec: ['centralized digital records', 'workflow automation', 'role-based dashboards', 'automated notifications and reports'] }
 };
 
-function localQuestions(title, stakeholders, count, method, format) {
+function localQuestions(title, stakeholders, count, method, format, language) {
   method = (method || 'Semi-Structured').trim();
   format = (format || 'Individual Interview').trim();
+  const lang = normLang(language);
+  const tl = lang === 'Tagalog';
   const sh = splitStakeholders(stakeholders);
   if (!sh.length) throw Object.assign(new Error('stakeholders'), { code: 'VALIDATION' });
   const titleRef = title.trim(); // Use full title naturally
   const D = DOMAIN[detectDomain(title)] || DOMAIN.default;
-  const cats = ['Current Process', 'Pain Points', 'Requirements', 'Data & Records', 'Reporting', 'Experience', 'Improvement', 'Priorities'];
+  const cats = tl
+    ? ['Proseso', 'Mga Problema', 'Pangangailangan', 'Data at Rekord', 'Ulat', 'Karanasan', 'Pagbabago', 'Prioridad']
+    : ['Current Process', 'Pain Points', 'Requirements', 'Data & Records', 'Reporting', 'Experience', 'Improvement', 'Priorities'];
   const out = [];
   let i = 0;
   const push = (s, c, t) => { if (out.length < count) out.push({ stakeholder: s, category: c, text: t }); };
@@ -84,16 +88,9 @@ function localQuestions(title, stakeholders, count, method, format) {
   const isUnstructured = method === 'Unstructured';
 
   // Follow-up questions for Semi-Structured mode - short, easy clarifiers
-  const followUps = [
-    'Can you give me an example?',
-    'How often does that happen?',
-    'How does that affect your work?',
-    'Why do you think that happens?',
-    'What would you prefer instead?',
-    'Who else is affected by that?',
-    'When did you first notice it?',
-    'What change would help most?'
-  ];
+  var followUps = tl
+    ? ['Maaari mo bang bigyan ako ng isang halimbaga?', 'Gaano kadalas ito nangyayari?', 'Paano iyon nakaapekto sa iyong trabaho?', 'Bakit mo iniisip na iyon ay nangyayari?', 'Ano ang mas gusto mo sa halip?', 'Sino pa ang naapekto nito?', 'Kailan mo una tingnan ito?', 'Ano ang pagbabago na pinakatulong?']
+    : ['Can you give me an example?', 'How often does that happen?', 'How does that affect your work?', 'Why do you think that happens?', 'What would you prefer instead?', 'Who else is affected by that?', 'When did you first notice it?', 'What change would help most?'];
 
   while (out.length < count) {
     const s = sh[i % sh.length];
@@ -105,42 +102,21 @@ function localQuestions(title, stakeholders, count, method, format) {
 
     if (isStructured) {
       // Structured: short, direct, survey-style — one topic per question, NO follow-ups
-      const st = [
-        'What steps do you follow for ' + D.proc[procIdx] + ' related to "' + titleRef + '"?',
-        'What problems do you encounter with ' + D.pain[painIdx] + '?',
-        'What features do you need most in "' + titleRef + '"?',
-        'What records or data do you handle for "' + titleRef + '"?',
-        'What reports do you need from "' + titleRef + '"?',
-        'How do you receive updates about "' + titleRef + '" today?',
-        'Which manual task would you remove first in your work?',
-        'How would we know that "' + titleRef + '" is successful?'
-      ];
+            const st = tl
+        ? ['Ano ang mga hakbang na sinusunod mo para sa ' + D.proc[procIdx] + ' na may kinalaman sa "' + titleRef + '"?', 'Ano ang mga problema na nararanasan mo sa ' + D.pain[painIdx] + '?', 'Ano ang mga tampok na pinakakailangan mo sa "' + titleRef + '"?', 'Ano ang mga rekord o data na hinaharap mo para sa "' + titleRef + '"?', 'Ano ang mga ulat na kailangan mo mula sa "' + titleRef + '"?', 'Paano mo natatanggap ang mga update tungkol sa "' + titleRef + '" ngayon?', 'Alin ang manu-mano ng gawain na nais mong tanggalin una sa iyong trabaho?', 'Paano nating malalaman na ang "' + titleRef + '" ay matagumpayan?']
+        : ['What steps do you follow for ' + D.proc[procIdx] + ' related to "' + titleRef + '"?', 'What problems do you encounter with ' + D.pain[painIdx] + '?', 'What features do you need most in "' + titleRef + '"?', 'What records or data do you handle for "' + titleRef + '"?', 'What reports do you need from "' + titleRef + '"?', 'How do you receive updates about "' + titleRef + '" today?', 'Which manual task would you remove first in your work?', 'How would we know that "' + titleRef + '" is successful?'];
       push(s, c, st[i % st.length]);
     } else if (isUnstructured) {
       // Unstructured: casual, friendly, broad conversation starters
-      const st = [
-        'Tell me about your experience with "' + titleRef + '" so far.',
-        'What do you find most challenging in your work related to "' + titleRef + '"?',
-        'What would make your daily work on "' + titleRef + '" easier?',
-        'Can you share a recent experience handling records for "' + titleRef + '"?',
-        'How do you usually stay updated about "' + titleRef + '"?',
-        'If you could change one thing about "' + titleRef + '", what would it be?',
-        'What does a good day at work look like for you?',
-        'Is there anything else about "' + titleRef + '" you want to share?'
-      ];
+            const st = tl
+        ? ['Sabihin mo sa akin kung paano ang iyong karanasan sa "' + titleRef + '" hanggang ngay.', 'Ano ang pinakamahirap na bahagi ng iyong trabaho na may kinalaman sa "' + titleRef + '"?', 'Ano ang makakatulong upang mas maging madali ang iyong araw-arawng trabaho sa "' + titleRef + '"?', 'Maaari mo bang ibahagi ang isang karawanig na karanasan sa pagproseso ng rekord para sa "' + titleRef + '"?', 'Paano mo karaniwang nanabik tungkol sa "' + titleRef + '"?', 'Kung maaari kang baguhin ang isa sa "' + titleRef + '", ano ito?', 'Ano ang hitsura ng isang magandang araw para sa iyo?', 'May iba pa bang bagay tungkol sa "' + titleRef + '" na nais mong ibahagi?']
+        : ['Tell me about your experience with "' + titleRef + '" so far.', 'What do you find most challenging in your work related to "' + titleRef + '"?', 'What would make your daily work on "' + titleRef + '" easier?', 'Can you share a recent experience handling records for "' + titleRef + '"?', 'How do you usually stay updated about "' + titleRef + '"?', 'If you could change one thing about "' + titleRef + '", what would it be?', 'What does a good day at work look like for you?', 'Is there anything else about "' + titleRef + '" you want to share?'];
       push(s, c, st[i % st.length]);
     } else {
       // Semi-Structured: simple main question + ONE short easy follow-up
-      const mainQs = [
-        'Can you describe how you handle ' + D.proc[procIdx] + ' today?',
-        'What problems related to ' + D.pain[painIdx] + ' do you usually experience?',
-        'What do you need most from "' + titleRef + '"?',
-        'What records or information do you use for "' + titleRef + '"?',
-        'What reports or summaries do you need most often?',
-        'How would you like to be updated about "' + titleRef + '"?',
-        'Which task should be automated first?',
-        'What would make "' + titleRef + '" successful for you?'
-      ];
+            const mainQs = tl
+        ? ['Maaari mo bang ilarawan kung paano mo ginagawa ang ' + D.proc[procIdx] + ' ngayon?', 'Ano ang mga problema na may kinalaman sa ' + D.pain[painIdx] + ' na karaniwang nararanasan mo?', 'Ano ang pinakakailangan mo mula sa "' + titleRef + '"?', 'Ano ang mga rekord o impormasyon na ginagamit mo para sa "' + titleRef + '"?', 'Ano ang mga ulat o buod na pinakakadalas mong kailangan?', 'Paano mo gusto maipamalang tungkol sa "' + titleRef + '"?', 'Alin ang dapat maging una na automat?', 'Ano ang magpapatungo na "' + titleRef + '" para sa iyo?']
+        : ['Can you describe how you handle ' + D.proc[procIdx] + ' today?', 'What problems related to ' + D.pain[painIdx] + ' do you usually experience?', 'What do you need most from "' + titleRef + '"?', 'What records or information do you use for "' + titleRef + '"?', 'What reports or summaries do you need most often?', 'How would you like to be updated about "' + titleRef + '"?', 'Which task should be automated first?', 'What would make "' + titleRef + '" successful for you?'];
       push(s, c, mainQs[i % mainQs.length]);
       // Add ONE follow-up that is context-aware (uses title, stakeholder, process/pain)
       if (out.length < count) {
@@ -153,28 +129,30 @@ function localQuestions(title, stakeholders, count, method, format) {
   }
   return out.slice(0, count);
 }
-async function generateQuestions(title, stakeholders, count, method, format) {
+async function generateQuestions(title, stakeholders, count, method, format, language) {
   count = Math.max(1, Math.min(50, parseInt(count) || 20));
   method = (method || 'Semi-Structured').trim();
   format = (format || 'Individual Interview').trim();
   if (!title || !title.trim()) throw Object.assign(new Error('title'), { code: 'VALIDATION' });
-  if (!hasOpenAI()) return { questions: localQuestions(title.trim(), stakeholders, count, method, format), source: 'local-smart' };
-  const sh = splitStakeholders(stakeholders).join(', ');
+  if (!hasOpenAI()) return { questions: localQuestions(title.trim(), stakeholders, count, method, format, language), source: 'local-smart' };
+    const sh = splitStakeholders(stakeholders).join(', ');
+  const lang = normLang(language);
+  const langPhrase = lang === 'Tagalog' ? 'simple, respectful, and natural conversational Tagalog' : 'plain, everyday English';
   const isStructured = method === 'Structured';
   const isUnstructured = method === 'Unstructured';
   const isSemi = !isStructured && !isUnstructured;
 
   const methodBlock = isStructured
-    ? 'INTERVIEW METHOD: STRUCTURED (fixed survey-style questionnaire)\n' + 'RULES:\n' + '- Questions must be SHORT, simple and direct — like a survey form. Each is answerable in 1-2 sentences.\n' + '- Each question asks about ONE topic only (what, which, how many, how often).\n' + '- No follow-up questions. Not conversational. Same questions for every respondent.\n' + '- Keep the language plain and easy to understand — avoid long compound questions.\n' + '- Cover: current process, problems, requirements, data/records, reports, desired features.'
+    ? 'INTERVIEW METHOD: STRUCTURED (fixed survey-style questionnaire)\n' + 'RULES:\n' + '- Questions must be SHORT, simple and direct — like a survey form. Each is answerable in 1-2 sentences.\n' + '- Each question asks about ONE topic only (what, which, how many, how often).\n' + '- No follow-up questions. Not conversational. Same questions for every respondent.\n' + '- Keep the language ' + langPhrase + ' — avoid long compound questions.\n' + '- Cover: current process, problems, requirements, data/records, reports, desired features.'
     : isUnstructured
-    ? 'INTERVIEW METHOD: UNSTRUCTURED (casual guided conversation)\n' + 'RULES:\n' + '- Questions must sound like FRIENDLY CONVERSATION — short, warm, easy to answer.\n' + '- Start broad (Tell me about…, What is it like…?, What do you find hardest…?).\n' + '- One idea per question. Never stack multiple questions into one sentence.\n' + '- Plain, everyday words — the respondent should never need clarification to understand.\n' + '- The interview feels like a natural chat, NOT a questionnaire.'
-    : 'INTERVIEW METHOD: SEMI-STRUCTURED (main questions + simple follow-ups)\n' + 'RULES:\n' + '- Main questions must be SIMPLE, short and open enough for a detailed answer.\n' + '- For each main question, add ONE short, easy follow-up question right after it.\n' + '- Follow-ups are simple clarifiers: Can you give an example? How often? What makes it hard?\n' + '- Keep both main and follow-up questions in plain, easy English.\n' + '- Clear structure but allows deeper exploration. Not identical to Structured style.';
+    ? 'INTERVIEW METHOD: UNSTRUCTURED (casual guided conversation)\n' + 'RULES:\n' + '- Questions must sound like FRIENDLY CONVERSATION — short, warm, easy to answer.\n' + '- Start broad (Tell me about…, What is it like…?, What do you find hardest…?).\n' + '- One idea per question. Never stack multiple questions into one sentence.\n' + '- Use ' + langPhrase + ' — the respondent should never need clarification to understand.\n' + '- The interview feels like a natural chat, NOT a questionnaire.'
+        : 'INTERVIEW METHOD: SEMI-STRUCTURED (main questions + simple follow-ups)\n' + 'RULES:\n' + '- Main questions must be SIMPLE, short and open enough for a detailed answer.\n' + '- For each main question, add ONE short, easy follow-up question right after it.\n' + '- Follow-ups are simple clarifiers: Can you give an example? How often? What makes it hard?\n' + '- Keep both main and follow-up questions in ' + langPhrase + '.\n' + '- Clear structure but allows deeper exploration. Not identical to Structured style.';
 
   const formatBlock = format === 'Group Interview'
     ? '\n\nINTERVIEW FORMAT: GROUP INTERVIEW\n' + '- Questions should be easy to discuss in a group setting (multiple perspectives, consensus).'
     : '\n\nINTERVIEW FORMAT: INDIVIDUAL INTERVIEW\n' + '- Questions are for one-on-one interview with one stakeholder.';
 
-  const prompt = 'You are an AI Interview Question Generator for an Information System Requirements Gathering System.\n\n' + 'Generate interview questions based on the following inputs:\n\n' + 'Interview Title: "' + title + '"\n' + 'Stakeholders: ' + sh + '\n' + 'Number of Questions: ' + count + '\n' + methodBlock + formatBlock + '\n\n' + 'GENERAL RULES:\n' + '- Questions must be relevant to the Interview Title and Stakeholders.\n' + '- IMPORTANT: keep every question SHORT (1-2 sentences) and SIMPLE — easy for any stakeholder to understand and answer quickly.\n' + '- Use plain everyday English. No jargon. No double-barreled (two-in-one) questions.\n' + '- Do not repeat questions.\n' + '- Avoid leading or biased questions.\n' + '- Focus on gathering useful information for system analysis and requirements.\n' + '- Generate exactly ' + count + ' questions.\n' + '- If the method is Semi-Structured, pair each main question with ONE short follow-up within the total.\n' + '- If the method is Structured, output only the main questions.\n' + '- If the method is Unstructured, output conversational questions only.\n\n' + 'Return ONLY valid JSON: an array of objects with keys "stakeholder", "category", "text". No markdown, no commentary.';
+  const prompt = 'You are an AI Interview Question Generator for an Information System Requirements Gathering System.\n\n' + 'IMPORTANT: Generate ALL questions in ' + langPhrase + '. Do not mix languages.\n\n' + 'Generate interview questions based on the following inputs:\n\n' + 'Interview Title: "' + title + '"\n' + 'Stakeholders: ' + sh + '\n' + 'Number of Questions: ' + count + '\n' + methodBlock + formatBlock + '\n\n' + 'GENERAL RULES:\n' + '- Questions must be relevant to the Interview Title and Stakeholders.\n' + '- IMPORTANT: keep every question SHORT (1-2 sentences) and SIMPLE — easy for any stakeholder to understand and answer quickly.\n' + '- Use ' + langPhrase + '. No jargon. No double-barreled (two-in-one) questions.\n' + '- Do not repeat questions.\n' + '- Avoid leading or biased questions.\n' + '- Focus on gathering useful information for system analysis and requirements.\n' + '- Generate exactly ' + count + ' questions.\n' + '- If the method is Semi-Structured, pair each main question with ONE short follow-up within the total.\n' + '- If the method is Structured, output only the main questions.\n' + '- If the method is Unstructured, output conversational questions only.\n\n' + 'Return ONLY valid JSON: an array of objects with keys "stakeholder", "category", "text". No markdown, no commentary.';
 
   const raw = await callOpenAI([{ role: 'system', content: 'You output only valid JSON arrays.' }, { role: 'user', content: prompt }], isUnstructured ? 4000 : 3500);
   const cleaned = raw.replace(/```json|```/g, '').trim();
@@ -197,28 +175,30 @@ function snippetOf(answer, max = 90) {
 }
 
 /* Semi-Structured: follow-up CONNECTED to the respondent's last answer */
-function localFollowUp(iv, lastQ, answer) {
+function localFollowUp(iv, lastQ, answer, language) {
+  const tl = normLang(language) === 'Tagalog';
   const a = String(answer || '').toLowerCase();
   const snip = snippetOf(answer);
   const st = lastQ.stakeholder;
+  const title = iv.title;
   if (/(manual|manually|paper|paperwork|handwritten|encode|encoding|retype|re-encode)/.test(a))
-    return 'You mentioned "' + snip + '". Which specific part of that manual process takes the most time, and what usually causes the delay?';
+    return tl ? 'Nabanggit mo "' + snip + '". Alin ang partikular na bahagi ng manu-mano ng proseso na kumakatwiran ng oras, at ano ang karaniwang dahilan ng delay?' : 'You mentioned "' + snip + '". Which specific part of that manual process takes the most time, and what usually causes the delay?';
   if (/(slow|slower|long|time|takes|queue|delay|wait|waiting|backlog)/.test(a))
-    return 'You said "' + snip + '". Which step exactly takes the longest, and how much time is lost because of it?';
+    return tl ? 'Sinabi mo "' + snip + '". Alin eksaktong hakbang ang pinakamatagal, at gaano kalaki ang oras na nawala dahil dito?' : 'You said "' + snip + '". Which step exactly takes the longest, and how much time is lost because of it?';
   if (/(error|errors|mistake|wrong|inaccurate|incorrect|missing|lost|lose|duplicate)/.test(a))
-    return 'When "' + snip + '" happens, what is usually the cause, and how do you currently fix it?';
+    return tl ? 'Kapag "' + snip + '" ay nangyayari, ano ang karaniwang dahilan, at paano mo ito inaayos ngayon?' : 'When "' + snip + '" happens, what is usually the cause, and how do you currently fix it?';
   if (/(difficult|hard|challenge|struggle|problem|issue|concern)/.test(a))
-    return 'Can you describe a specific situation where "' + snip + '" became a problem? What was the impact on your work as ' + st + '?';
+    return tl ? 'Maaari mo bang ilarawan ang isang partikular na sitwasyon kung saan "' + snip + '" ay naging problema? Ano ang epekto nito sa iyong trabaho bilang ' + st + '?' : 'Can you describe a specific situation where "' + snip + '" became a problem? What was the impact on your work as ' + st + '?';
   if (/(because|due to|since|cause|reason)/.test(a))
-    return 'Since "' + snip + '", what effect does that have on the rest of the process for "' + iv.title + '"?';
+    return tl ? 'Dahil sa "' + snip + '", ano ang epekto nito sa natitirang proseso para sa "' + title + '"?' : 'Since "' + snip + '", what effect does that have on the rest of the process for "' + title + '"?';
   if (/(need|needs|want|should|must|wish|hope|prefer|feature)/.test(a))
-    return 'Regarding "' + snip + '" — what specific feature would address that, and how should it work for ' + st + '?';
-  return 'You mentioned "' + snip + '". Can you give me a specific example of that and explain how it affects "' + iv.title + '"?';
+    return tl ? 'Tungkol sa "' + snip + '" — ano ang partikular na tampok na lutasin iyon, at paano ito dapat gumana para sa ' + st + '?' : 'Regarding "' + snip + '" — what specific feature would address that, and how should it work for ' + st + '?';
+  return tl ? 'Nabanggit mo "' + snip + '". Maaari mo bang bigyan ako ng isang partikular na halimbaga nito at paliwanag kung paano ito nakaapekto sa "' + title + '"?' : 'You mentioned "' + snip + '". Can you give me a specific example of that and explain how it affects "' + title + '"?';
 }
 
 /* Unstructured: fully adaptive — next question comes from the conversation itself,
    following Current Process → Problems → Causes → Effects → Needs → Features → Suggestions */
-function localAdaptive(iv, qa) {
+function localAdaptive(iv, qa, language) {
   const answered = qa.filter(q => q.answer && q.answer.trim());
   const t = iv.title;
   const st = (answered.length ? answered[answered.length - 1].stakeholder : (iv.stakeholders || '').split(',')[0].trim()) || 'General';
@@ -229,25 +209,33 @@ function localAdaptive(iv, qa) {
   const snip = snippetOf(lastAns);
   const fresh = (text) => !asked.some(x => x === String(text).toLowerCase());
 
-  const stages = [
-    { test: () => answered.length === 0, text: 'To begin, can you tell me about your role and walk me through how you currently handle things related to "' + t + '"?' },
-    { test: () => /(problem|issue|difficult|hard|challenge|slow|manual|error|delay|queue|lost|wrong|concern)/.test(a) && !askedAbout('why do you think that keeps happening'), text: 'You mentioned "' + snip + '". Why do you think that keeps happening?' },
-    { test: () => /(because|due to|since|reason|cause|manual)/.test(a) && !askedAbout('what effect does it have on the people'), text: 'Given that "' + snip + '", what effect does it have on the people and process involved in "' + t + '"?' },
-    { test: () => /(effect|impact|affect|results in|leads to|delays|affects|wait|waiting)/.test(a) && !askedAbout('what do you need most'), text: 'Considering those effects, what do you need most to make your work easier?' },
-    { test: () => /(need|needs|want|wish|hope|should|must|improve|better)/.test(a) && !askedAbout('what should it do exactly'), text: 'If "' + t + '" could include one feature to solve what we just discussed, what should it do exactly?' },
-    { test: () => /(feature|function|automate|automation|online|digital|system)/.test(a) && !askedAbout('how would that feature change'), text: 'How would that feature change the way you work day to day? Do you have any concerns about it?' }
-  ];
+    const stages = tl
+    ? [{ test: () => answered.length === 0, text: 'Simula sa una, maaari mong sabihin kung ano ang iyong papel at iwalk ako sa kung paano ka kasalukuyang nagpapahalaga sa mga bagay na may kinalaman sa "' + t + '"?' },
+       { test: () => /(problem|issue|difficult|hard|challenge|slow|manual|error|delay|queue|lost|wrong|concern)/.test(a) && !askedAbout('bakit'), text: 'Nabanggit mo "' + snip + '". Bakit mo iniisip na ito ay patuloy na nangyayari?' },
+       { test: () => /(because|due to|since|reason|cause|manual)/.test(a) && !askedAbout('ano ang epekto'), text: 'Bubuo ng iyon na "' + snip + '", ano ang epekto nito sa mga tao at proseso na kasama sa "' + t + '"?' },
+       { test: () => /(effect|impact|affect|results in|leads to|delays|affects|wait|waiting)/.test(a) && !askedAbout('ano pinakakailangan'), text: 'Tandaan ang mga epekto, ano ang pinakakailangan mo upang mas madaling gawin ang iyong trabaho?' },
+       { test: () => /(need|needs|want|wish|hope|should|must|improve|better)/.test(a) && !askedAbout('ano ang dapat'), text: 'Kung ang "' + t + '" ay maaaring magsama ng isang tampok na lutasin ang nausap, ano ang dapat nitong gawin nang eksaktamente?' },
+       { test: () => /(feature|function|automate|automation|online|digital|system)/.test(a) && !askedAbout('paano'), text: 'Paano kabuo nito ang paraan kung paano ka gumagawa araw-araw? May anumang alalahanin ka rin?' }]
+    : [{ test: () => answered.length === 0, text: 'To begin, can you tell me about your role and walk me through how you currently handle things related to "' + t + '"?' },
+       { test: () => /(problem|issue|difficult|hard|challenge|slow|manual|error|delay|queue|lost|wrong|concern)/.test(a) && !askedAbout('why do you think that keeps happening'), text: 'You mentioned "' + snip + '". Why do you think that keeps happening?' },
+       { test: () => /(because|due to|since|reason|cause|manual)/.test(a) && !askedAbout('what effect does it have on the people'), text: 'Given that "' + snip + '", what effect does it have on the people and process involved in "' + t + '"?' },
+       { test: () => /(effect|impact|affect|results in|leads to|delays|affects|wait|waiting)/.test(a) && !askedAbout('what do you need most'), text: 'Considering those effects, what do you need most to make your work easier?' },
+       { test: () => /(need|needs|want|wish|hope|should|must|improve|better)/.test(a) && !askedAbout('what should it do exactly'), text: 'If "' + t + '" could include one feature to solve what we just discussed, what should it do exactly?' },
+       { test: () => /(feature|function|automate|automation|online|digital|system)/.test(a) && !askedAbout('how would that feature change'), text: 'How would that feature change the way you work day to day? Do you have any concerns about it?' }];
   for (const s of stages) if (s.test()) return { text: s.text, stakeholder: st, category: 'Adaptive' };
 
   // Explore topics not yet covered
-  const areas = [
-    ['records', 'How are records and information currently kept for "' + t + '", and where do things usually get misplaced?'],
-    ['reports', 'What reports or summaries do you wish you had instantly available for "' + t + '"?'],
-    ['approval', 'Walk me through how approvals work today for "' + t + '" — where does it usually slow down?'],
-    ['redesign', 'If you could redesign one part of "' + t + '" from scratch, what would it look like and why?']
-  ];
+    const areas = tl
+    ? [['records', 'Paano ginagampan ang mga rekord at impormasyon para sa "' + t + '", at saan karaniwang nawawala?'],
+       ['reports', 'Ano ang mga ulat o buod na nais mong maging agad available para sa "' + t + '"?'],
+       ['approval', 'Iwalk ako kung paano gumagana ang mga approval ngayon para sa "' + t + '" — saan karaniwang mabagal?'],
+       ['redesign', 'Kung maaari kang redesignin ang isa sa "' + t + '" mula simula, paano ito dapat maging hitsura at bakit?']]
+    : [['records', 'How are records and information currently kept for "' + t + '", and where do things usually get misplaced?'],
+       ['reports', 'What reports or summaries do you wish you had instantly available for "' + t + '"?'],
+       ['approval', 'Walk me through how approvals work today for "' + t + '" — where does it usually slow down?'],
+       ['redesign', 'If you could redesign one part of "' + t + '" from scratch, what would it look like and why?']];
   for (const [kw, text] of areas) if (!askedAbout(kw)) return { text, stakeholder: st, category: 'Adaptive' };
-  return { text: 'Before we wrap up, is there anything about "' + t + '" we have not covered that you think is important to share?', stakeholder: st, category: 'Adaptive' };
+    return { text: tl ? 'Bago tayo tapusin, may iba pang bagay tungkol sa "' + t + '" na hindi pa natin nausap na iniisip mo ay mahalaga para ibahagi?' : 'Before we wrap up, is there anything about "' + t + '" we have not covered that you think is important to share?', stakeholder: st, category: 'Adaptive' };
 }
 
 /* Generates the NEXT question from the interview context.
@@ -255,16 +243,18 @@ function localAdaptive(iv, qa) {
 async function nextQuestion(iv, qa, mode) {
   const answered = qa.filter(q => q.answer && q.answer.trim());
   const lastQ = answered.length ? answered[answered.length - 1] : null;
+  const tl = normLang(iv.language) === 'Tagalog';
   if (!hasOpenAI()) {
     if (mode === 'followup') {
-      if (!lastQ) return { text: 'Can you tell me more about how you currently handle your tasks related to "' + iv.title + '"?', category: 'Follow-up', source: 'local-smart' };
-      return { text: localFollowUp(iv, lastQ, lastQ.answer), category: 'Follow-up', source: 'local-smart' };
+      if (!lastQ) return { text: tl ? 'Maaari mo bang sabihin sa akin pa kung paano mo kasalukuyang ginagawa ang iyong mga gawain na may kinalaman sa "' + iv.title + '"?' : 'Can you tell me more about how you currently handle your tasks related to "' + iv.title + '"?', category: 'Follow-up', source: 'local-smart' };
+      return { text: localFollowUp(iv, lastQ, lastQ.answer, iv.language), category: 'Follow-up', source: 'local-smart' };
     }
-    return { ...localAdaptive(iv, qa), source: 'local-smart' };
+    return { ...localAdaptive(iv, qa, iv.language), source: 'local-smart' };
   }
   const conv = qa.map(q => 'Q' + q.number + (q.isFollowUp ? ' (AI follow-up)' : '') + ' [' + q.stakeholder + '/' + q.category + ']: ' + q.text + '\nA: ' + (q.answer && q.answer.trim() ? q.answer : '(not answered yet)')).join('\n\n');
   const isFollowup = mode === 'followup';
   const prompt = 'You are conducting a ' + (iv.interviewMethod || 'Semi-Structured') + ' requirements-gathering interview for "' + iv.title + '" (Stakeholders: ' + iv.stakeholders + ', Format: ' + (iv.interviewFormat || 'Individual Interview') + ').\n'
+    + 'IMPORTANT: Generate ALL questions in ' + (tl ? 'simple, respectful, and natural conversational Tagalog' : 'plain, everyday English') + '. Do not mix languages.\n\n'
     + 'Conversation so far:\n' + conv + '\n\n'
     + (isFollowup
       ? 'TASK: The respondent just answered the LAST question above. Analyze that answer. If it contains useful information, problems, unclear details, or something needing clarification, generate ONE follow-up question that is DIRECTLY connected to the specific content of that answer (quote or reference part of it). Do NOT move to a new topic. Do NOT repeat previous questions. If the answer is already fully clear, generate a follow-up that explores its impact on the system requirements.\n'

@@ -148,7 +148,7 @@ app.post('/api/interviews', requireAuth, (req, res) => {
   const { title, stakeholders } = req.body || {};
   if (!clean(title, 300).trim()) return res.status(400).json({ ok: false, error: 'Please complete all required fields: interview title is required.' });
   if (!clean(stakeholders, 1000).trim()) return res.status(400).json({ ok: false, error: 'Please complete all required fields: stakeholders are required.' });
-  res.json({ ok: true, interview: db.createInterview(req.user.id, { title: clean(title, 300).trim(), description: clean(req.body.description, 4000), stakeholders: clean(stakeholders, 1000).trim(), interviewee: clean(req.body.interviewee, 300), date: clean(req.body.date, 20) || new Date().toISOString().slice(0, 10), type: clean(req.body.type, 100) || 'General', interviewMethod: clean(req.body.interviewMethod, 50) || 'Semi-Structured', interviewFormat: clean(req.body.interviewFormat, 50) || 'Individual Interview' }) });
+    res.json({ ok: true, interview: db.createInterview(req.user.id, { title: clean(title, 300).trim(), description: clean(req.body.description, 4000), stakeholders: clean(stakeholders, 1000).trim(), interviewee: clean(req.body.interviewee, 300), date: clean(req.body.date, 20) || new Date().toISOString().slice(0, 10), type: clean(req.body.type, 100) || 'General', interviewMethod: clean(req.body.interviewMethod, 50) || 'Semi-Structured', interviewFormat: clean(req.body.interviewFormat, 50) || 'Individual Interview', language: clean(req.body.language, 20) || 'English' }) });
 });
 app.get('/api/interviews/:id', requireAuth, (req, res) => {
   const iv = db.getInterview(null, req.params.id);
@@ -168,7 +168,8 @@ app.put('/api/interviews/:id', requireAuth, (req, res) => {
   if (b.date !== undefined) patch.date = clean(b.date, 20);
   if (b.type !== undefined) patch.type = clean(b.type, 100);
   if (b.interviewMethod !== undefined) patch.interviewMethod = clean(b.interviewMethod, 50);
-  if (b.interviewFormat !== undefined) patch.interviewFormat = clean(b.interviewFormat, 50);
+    if (b.interviewFormat !== undefined) patch.interviewFormat = clean(b.interviewFormat, 50);
+  if (b.language !== undefined) patch.language = clean(b.language, 20) || 'English';
   if (b.status !== undefined && ['draft', 'in-progress', 'completed'].includes(b.status)) patch.status = b.status;
   if (patch.title !== undefined && !patch.title.trim()) return res.status(400).json({ ok: false, error: 'Interview title cannot be empty.' });
   const iv = db.updateInterview(null, req.params.id, patch);
@@ -190,7 +191,7 @@ app.post('/api/interviews/:id/generate', requireAuth, async (req, res) => {
     if (!iv) return res.status(404).json({ ok: false, error: 'Interview not found.' });
     if (!canManage(req, iv)) return res.status(403).json({ ok: false, error: 'Only the interview owner or an administrator can generate questions for this interview.' });
     const count = Math.max(1, Math.min(50, parseInt(req.body && req.body.count) || 20));
-    const out = await ai.generateQuestions(iv.title, iv.stakeholders, count, iv.interviewMethod || 'Semi-Structured', iv.interviewFormat || 'Individual Interview');
+        const out = await ai.generateQuestions(iv.title, iv.stakeholders, count, iv.interviewMethod || 'Semi-Structured', iv.interviewFormat || 'Individual Interview', iv.language || 'English');
     const rows = db.addQuestions(null, iv.id, out.questions);
     res.json({ ok: true, questions: rows, source: out.source });
   } catch (e) {

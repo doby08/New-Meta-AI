@@ -452,7 +452,7 @@ function pCreate() {
     if (!title || !sh) { toast('Please complete all required fields.', 'error'); return; }
     const btn = e.currentTarget; btnLoading(btn, true, 'Saving interview…');
     try {
-      const j = await api('/api/interviews', { method: 'POST', body: JSON.stringify({ title, description: $('#fDesc').value, stakeholders: sh, interviewee: $('#fWho').value, date: $('#fDate').value, type: $('#fType').value, interviewMethod: $('#fMethod').value, interviewFormat: $('#fFormat').value }) });
+      const j = await api('/api/interviews', { method: 'POST', body: JSON.stringify({ title, description: $('#fDesc').value, stakeholders: sh, interviewee: $('#fWho').value, date: $('#fDate').value, type: $('#fType').value, interviewMethod: $('#fMethod').value, interviewFormat: $('#fFormat').value, language: S.createLang === 'TL' ? 'Tagalog' : 'English' }) });
       toast('Interview created successfully.');
       btnLoading(btn, true, 'Generating questions…');
       const g = await api('/api/interviews/' + j.interview.id + '/generate', { method: 'POST', body: JSON.stringify({ count: Math.min(50, Math.max(1, parseInt($('#fCount').value) || 20)) }) });
@@ -525,7 +525,7 @@ async function editInterview(id, after) {
     $('#mOk').onclick = async (e) => {
       const btn = e.target; btnLoading(btn, true, 'Saving…');
       try {
-        await api('/api/interviews/' + id, { method: 'PUT', body: JSON.stringify({ title: $('#mTitle').value, stakeholders: $('#mSh').value, description: $('#mDesc').value, interviewee: $('#mWho').value, date: $('#mDate').value, type: $('#mType').value, interviewMethod: $('#mMethod').value, interviewFormat: $('#mFormat').value, status: $('#mStatus').value }) });
+        await api('/api/interviews/' + id, { method: 'PUT', body: JSON.stringify({ title: $('#mTitle').value, stakeholders: $('#mSh').value, description: $('#mDesc').value, interviewee: $('#mWho').value, date: $('#mDate').value, type: $('#mType').value, interviewMethod: $('#mMethod').value, interviewFormat: $('#mFormat').value, status: $('#mStatus').value, language: iv.language }) });
         closeModal(); toast('Interview updated successfully.'); if (after) after();
       } catch (err) { btnLoading(btn, false); toast(err.message, 'error'); }
     };
@@ -544,7 +544,7 @@ async function pAnswer(id) {
       $('#aBack').onclick = () => { S.qa.dirty = false; pMy(); };
       $('#aGen').onclick = async (e) => {
         const btn = e.target; btnLoading(btn, true, 'Generating…');
-        try { const g = await api('/api/interviews/' + id + '/generate', { method: 'POST', body: JSON.stringify({ count: parseInt($('#gCount').value) || 20 }) }); toast('Questions generated successfully (' + g.questions.length + ').'); pAnswer(id); }
+        try { const g = await api('/api/interviews/' + id + '/generate', { method: 'POST', body: JSON.stringify({ count: parseInt($('#gCount').value) || 20, language: j.interview.language || 'English' }) }); toast('Questions generated successfully (' + g.questions.length + ').'); pAnswer(id); }
         catch (err) { btnLoading(btn, false); toast(err.message, 'error'); }
       };
       return;
@@ -609,7 +609,7 @@ function drawQA() {
   });
   $('#qMore').onclick = async (e) => {
     const btn = e.currentTarget; btnLoading(btn, true, 'Generating…');
-    try { const g = await api('/api/interviews/' + S.qa.id + '/generate', { method: 'POST', body: JSON.stringify({ count: 10 }) }); toast('Questions generated successfully (+' + g.questions.length + ').'); pAnswer(S.qa.id); }
+    try { const g = await api('/api/interviews/' + S.qa.id + '/generate', { method: 'POST', body: JSON.stringify({ count: 10, language: S.qa.interview.language || 'English' }) }); toast('Questions generated successfully (+' + g.questions.length + ').'); pAnswer(S.qa.id); }
     catch (err) { btnLoading(btn, false); toast(err.message, 'error'); }
   };
   $('#qJump').onclick = () => {
