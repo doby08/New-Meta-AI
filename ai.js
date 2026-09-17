@@ -340,31 +340,32 @@ function localSurveyQuestions(stakeholder, language, topic) {
   ];
 }
 
-async function generateSurveyQuestions(stakeholder, language, topic) {
+async function generateSurveyQuestions(stakeholder, language, topic, count = 3) {
   const lang = normLang(language);
   const st = String(stakeholder || 'General').slice(0, 120);
   const tp = String(topic || 'General Survey').slice(0, 300);
-  const fallback = () => ({ questions: localSurveyQuestions(st, lang, tp), source: 'local-smart' });
+  const cnt = Math.max(1, Math.min(10, parseInt(count) || 3));
+  const fallback = () => ({ questions: localSurveyQuestions(st, lang, tp, cnt), source: 'local-smart' });
   // PRIMARY: OpenAI gpt-4o-mini with the dynamic interviewer prompt.
   if (hasOpenAI()) {
     try {
       const raw = await callOpenAI([
-        { role: 'system', content: interviewerSystemPrompt(st, lang, tp) },
+        { role: 'system', content: interviewerSystemPrompt(st, lang, tp, cnt) },
         { role: 'user', content: 'OUTPUT FORMAT (JSON ONLY): {"topic":"' + tp + '","stakeholder":"' + st + '","language":"' + lang + '","questions":[{"id":1,"question":"..."}]}' }
       ], 1200);
       const cleaned = raw.replace(/```json|```/g, '').trim();
       const j = JSON.parse(cleaned.slice(cleaned.indexOf('{'), cleaned.lastIndexOf('}') + 1));
       if (j && Array.isArray(j.questions) && j.questions.length) {
-        return { questions: j.questions.slice(0, 5).map((q, i) => ({ id: i + 1, question: String(q.question || q.text || '').slice(0, 2000) })), source: 'openai:' + MODEL };
+        return { questions: j.questions.slice(0, cnt).map((q, i) => ({ id: i + 1, question: String(q.question || q.text || '').slice(0, 2000) })), source: 'openai:' + MODEL };
       }
     } catch (e) { /* fall through to Ollama, then local */ }
   }
   // FALLBACK: local Ollama instance (offline-capable).
   try {
-    const raw = await callOllama(interviewerSystemPrompt(st, lang, tp) + ' Reply with JSON ONLY: {"questions":[{"id":1,"question":"..."}]}. Topic: ' + tp);
+    const raw = await callOllama(interviewerSystemPrompt(st, lang, tp, cnt) + ' Reply with JSON ONLY: {"questions":[{"id":1,"question":"..."}]}. Topic: ' + tp + '. Generate exactly ' + cnt + ' questions.');
     const j = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1));
     if (j && Array.isArray(j.questions) && j.questions.length) {
-      return { questions: j.questions.slice(0, 5).map((q, i) => ({ id: i + 1, question: String(q.question || q.text || '').slice(0, 2000) })), source: 'ollama:' + OLLAMA_MODEL };
+      return { questions: j.questions.slice(0, cnt).map((q, i) => ({ id: i + 1, question: String(q.question || q.text || '').slice(0, 2000) })), source: 'ollama:' + OLLAMA_MODEL };
     }
   } catch (e) { /* final fallback below */ }
   return fallback();
