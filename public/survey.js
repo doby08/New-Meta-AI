@@ -1,11 +1,11 @@
-/* STEPS 1-3: Field survey — language toggle, role select (QR ?role=),
-   topic auto-load, AI questions, Dexie offline save + auto-sync. */
+/* STEPS 1-3: Field survey — language toggle, topic auto-load, AI questions,
+   Dexie offline save + auto-sync. Role selection removed — direct to topic + question count. */
 const $ = (s) => document.querySelector(s);
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const S = { lang: 'Tagalog', role: '', category: '', surveyTitle: '', workerRole: '', locked: false, topic: null, questions: [], engine: '' };
+const S = { lang: 'Tagalog', role: '', category: '', surveyTitle: '', workerRole: '', locked: false, topic: null, questions: [], engine: '', qCount: 3 };
 const T = {
-  Tagalog: { sub: 'Piliin ang wika at ang inyong kategorya.', subLocked: 'Naka-lock ang detalye mula sa QR — piliin lang ang wika at simulan.', role: 'Ano ang iyong Stakeholder Category?', topic: 'Paksa / Topic', start: '▶ Simulan ang Interview', ansPh: 'Isulat po ang inyong sagot dito…', submit: '✅ Isumite ang mga Sagot', saving: 'Sine-save…', kTitle: 'Pamagat', kCat: 'Kategorya', kRole: 'Role', qrHint: '🔒 Naka-lock mula sa QR code. Ang Language Toggle lang ang puwedeng baguhin.' },
-  English: { sub: 'Choose your language and stakeholder category.', subLocked: 'Details are locked from the QR — just pick a language and start.', role: 'What is your Stakeholder Category?', topic: 'Topic', start: '▶ Start Interview', ansPh: 'Type your answer here…', submit: '✅ Submit Answers', saving: 'Saving…', kTitle: 'Title', kCat: 'Category', kRole: 'Role', qrHint: '🔒 Locked from the QR code. Only the Language Toggle can be changed.' }
+  Tagalog: { sub: 'Piliin ang wika, paksa, at ilang tanong.', subLocked: 'Naka-lock ang detalye mula sa QR — piliin lang ang wika at simulan.', role: 'Ano ang iyong Stakeholder Category?', topic: 'Paksa / Topic', start: '▶ Simulan ang Interview', ansPh: 'Isulat po ang inyong sagot dito…', submit: '✅ Isumite ang mga Sagot', saving: 'Sine-save…', kTitle: 'Pamagat', kCat: 'Kategorya', kRole: 'Role', qrHint: '🔒 Naka-lock mula sa QR code. Ang Language Toggle lang ang puwedeng baguhin.' },
+  English: { sub: 'Choose your language, topic, and how many questions.', subLocked: 'Details are locked from the QR — just pick a language and start.', role: 'What is your Stakeholder Category?', topic: 'Topic', start: '▶ Start Interview', ansPh: 'Type your answer here…', submit: '✅ Submit Answers', saving: 'Saving…', kTitle: 'Title', kCat: 'Category', kRole: 'Role', qrHint: '🔒 Locked from the QR code. Only the Language Toggle can be changed.' }
 };
 async function api(url, opts) {
   const r = await fetch(url, opts);
@@ -16,7 +16,7 @@ async function api(url, opts) {
 function applyLang() {
   const t = T[S.lang];
   $('#tSub').textContent = S.locked ? t.subLocked : t.sub;
-  $('#tRole').textContent = t.role; $('#tTopic').textContent = t.topic;
+  $('#tTopic').textContent = t.topic;
   $('#tQrHint').textContent = S.locked ? t.qrHint : (S.lang === 'Tagalog' ? 'Na-scan ang QR? Awtomatikong napili ang inyong kategorya. Maaari pa rin itong palitan.' : 'Scanned a QR? Your category is auto-selected but can still be changed.');
   const bl = document.querySelector('#startBtn .btn-label'); if (bl) bl.textContent = S.locked ? (S.lang === 'Tagalog' ? '▶ Simulan ang Interview' : '▶ Start Interview') : t.start;
   $('#langTl').classList.toggle('on', S.lang === 'Tagalog');
@@ -55,23 +55,6 @@ function renderQrBadges() {
     + '<div class="qr-badge"><span class="k">' + esc(t.kRole) + '</span><span class="v">' + esc(S.workerRole) + '</span><span class="lock">🔒</span></div>';
   const m = $('#manualCtx'); if (m) m.classList.add('hidden');
 }
-function applyLangAndReload() { applyLang(); loadRoles(); loadTopics(); }
-async function loadRoles() {
-  let roles = ['Farmer', 'Vendor', 'Resident'];
-  try { roles = (await api('/api/survey/roles')).roles || roles; }
-  catch {
-    try { const c = await localDb.topicsCache.toArray(); if (c.length) roles = [...new Set(c.map(x => x.stakeholder))]; } catch {}
-  }
-  // QR preselect (?role=Farmer&lang=Tagalog) applies ONCE so the user can still change it.
-  const q = new URLSearchParams(location.search);
-  if (!loadRoles.qrDone) {
-    loadRoles.qrDone = true;
-    if (q.get('role')) S.role = q.get('role');
-    if (q.get('lang') === 'English' || q.get('lang') === 'Tagalog') S.lang = q.get('lang');
-  }
-  $('#roleGrid').innerHTML = roles.map(r => '<button type="button" data-r="' + esc(r) + '" class="' + (r === S.role ? 'on' : '') + '">' + esc(r) + '</button>').join('');
-  document.querySelectorAll('#roleGrid button').forEach(b => b.onclick = () => { S.role = b.dataset.r; loadRoles(); loadTopics(); });
-}
 async function loadTopics() {
   let topics = [];
   try {
@@ -94,27 +77,36 @@ async function startInterview() {
   const bl = btn.querySelector('.btn-label');
   if (bl) bl.textContent = S.lang === 'Tagalog' ? '⏳ Gumagawa ng tanong…' : '⏳ Generating questions…';
   try {
-    if (!S.role) throw new Error(S.lang === 'Tagalog' ? 'Piliin po muna ang inyong kategorya.' : 'Please choose your category first.');
     if (!S.topic) throw new Error(S.lang === 'Tagalog' ? 'Sandali lang po, naglo-load pa ang paksa…' : 'Please wait, topics are still loading…');
+    let count = parseInt($('#qCount').value, 10);
+    if (!count || count < 1) count = 3;
+    if (count > 10) count = 10;
+    S.qCount = count;
     let qs = [];
     try {
-      const j = await api('/api/ai/questions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stakeholder: S.role, language: S.lang, topic: S.topic.topic }) });
+      const j = await api('/api/ai/questions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stakeholder: S.role, language: S.lang, topic: S.topic.topic, count: S.qCount }) });
       qs = j.questions; S.engine = j.source;
-      try { await localDb.questionsCache.put({ key: S.role + '|' + S.lang + '|' + S.topic.topic, questions: qs, updatedAt: new Date().toISOString() }); } catch {}
+      try { await localDb.questionsCache.put({ key: S.role + '|' + S.lang + '|' + S.topic.topic + '|' + S.qCount, questions: qs, updatedAt: new Date().toISOString() }); } catch {}
     } catch {
-      const c = await localDb.questionsCache.get(S.role + '|' + S.lang + '|' + S.topic.topic).catch(() => null);
+      const c = await localDb.questionsCache.get(S.role + '|' + S.lang + '|' + S.topic.topic + '|' + S.qCount).catch(() => null);
       if (c && c.questions) { qs = c.questions; S.engine = 'offline-cache'; }
-      else throw new Error(S.lang === 'Tagalog' ? 'Walang internet at walang naka-cache na tanong. Buksan muna ito nang online bago pumunta sa field.' : 'No internet and no cached questions. Open this page online once before field work.');
+      else {
+        // Fallback: generate if count not cached
+        try {
+          const j2 = await api('/api/ai/questions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stakeholder: S.role, language: S.lang, topic: S.topic.topic, count: S.qCount }) });
+          qs = j2.questions; S.engine = j2.source;
+        } catch { throw new Error(S.lang === 'Tagalog' ? 'Walang internet at walang naka-cache na tanong. Buksan muna ito nang online bago pumunta sa field.' : 'No internet and no cached questions. Open this page online once before field work.'); }
+      }
     }
     S.questions = qs;
     const t = T[S.lang];
-    $('#qWrap').innerHTML = '<div class="card"><div class="card-head"><div><h2>' + esc(S.topic.topic) + '</h2><p class="muted">' + esc(S.role) + ' · ' + esc(S.lang) + '</p></div></div>'
+    $('#qWrap').innerHTML = '<div class="card"><div class="card-head"><div><h2>' + esc(S.topic.topic) + '</h2><p class="muted">' + esc(S.role) + ' · ' + esc(S.lang) + ' · ' + S.qCount + ' tanong</p></div></div>'
       + qs.map((q, i) => '<div class="q-card"><b>' + (i + 1) + '. ' + esc(q.question) + '</b><textarea data-i="' + i + '" placeholder="' + esc(t.ansPh) + '"></textarea></div>').join('')
       + '<button class="btn btn-primary btn-block" id="submitBtn">' + esc(t.submit) + '</button></div>';
     $('#submitBtn').onclick = submitAnswers;
     $('#qWrap').scrollIntoView({ behavior: 'smooth' });
   } catch (err) { alert(err.message); }
-  btn.disabled = false; applyLang(); // label only — do NOT reload roles (preserves in-progress Q&A)
+  btn.disabled = false; applyLang(); // label only — do NOT reload topics (preserves in-progress Q&A)
 }
 async function submitAnswers() {
   const t = T[S.lang];
@@ -154,16 +146,21 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#langTl').onclick = () => { S.lang = 'Tagalog'; applyLangAndReload(); };
   $('#langEn').onclick = () => { S.lang = 'English'; applyLangAndReload(); };
   $('#startBtn').onclick = startInterview;
+  $('#qCount').oninput = () => {
+    const v = parseInt($('#qCount').value, 10);
+    if (v >= 1 && v <= 10) S.qCount = v;
+  };
   applyLang();
-  loadRoles(); loadTopics();
+  loadTopics();
+  // Init default qCount
+  const qc = $('#qCount'); if (qc) S.qCount = parseInt(qc.value, 10) || 3;
 });
 /* Persist the chosen language in the URL so the next reload keeps it (incl. after Start). */
 function applyLangAndReload() {
   const q = new URLSearchParams(location.search);
   q.set('lang', S.lang);
-  // Replace only the query string so the current page state (role selection, topic) is re-rendered
-  // with the new language.  Title/category/role come from the QR on first load, so we keep them.
   history.replaceState(null, '', '?' + q.toString());
   applyLang();
+  loadTopics();
 }
 

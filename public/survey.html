@@ -13,9 +13,6 @@
 .lang-toggle{display:flex;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:5px;gap:5px;margin:12px 0}
 .lang-toggle button{flex:1;border:0;border-radius:10px;padding:11px;font-weight:700;font-size:15px;background:transparent;color:var(--muted);cursor:pointer}
 .lang-toggle button.on{background:linear-gradient(135deg,#3b6ef6,#7c3aed);color:#fff}
-.role-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:10px 0}
-.role-grid button{border:2px solid var(--line);background:var(--card);border-radius:14px;padding:14px 8px;font-size:14px;font-weight:700;cursor:pointer;color:var(--ink)}
-.role-grid button.on{border-color:#3b6ef6;background:#eef2ff}
 .qr-badges{display:grid;grid-template-columns:1fr;gap:8px;margin:10px 0}
 .qr-badge{display:flex;gap:10px;align-items:center;background:var(--hint-bg);border:1px solid var(--hint-bd);border-radius:12px;padding:10px 12px;font-size:14px}
 .qr-badge .k{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);min-width:86px}
@@ -45,12 +42,12 @@
         <button type="button" id="langEn">🇬🇧 English</button>
       </div>
     </label>
-    <!-- STEP 2: QR entry lands here (?role=&category=&title=) → Role Selection (hidden when QR-locked) -->
+    <!-- STEP 2: Topic Selection (gawing simple, walang role buttons) -->
     <div id="manualCtx">
-    <label class="field"><span id="tRole">Ano ang iyong Stakeholder Category?</span>
-      <div class="role-grid" id="roleGrid"></div>
-    </label>
     <label class="field"><span id="tTopic">Paksa / Topic</span><select id="topicSel"></select></label>
+    <label class="field"><span id="tQCount">Ilang Tanong / Number of Questions</span>
+      <input id="qCount" type="number" min="1" max="10" value="3" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--input);font:inherit;font-size:16px">
+    </label>
     </div>
     <button class="btn btn-primary btn-block" id="startBtn"><span class="btn-label">▶ Simulan ang Interview</span><span class="spinner hidden"></span></button>
     <p class="login-hint" id="tQrHint">Na-scan ang QR? Awtomatikong napili ang inyong kategorya. Maaari pa rin itong palitan.</p>
