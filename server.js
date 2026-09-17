@@ -404,6 +404,9 @@ app.put('/api/settings', requireAuth, (req, res) => {
   res.json({ ok: true, settings: db.saveSettings(req.user.id, patch) });
 });
 
+const qrRoutes = require('./qr_survey_routes');
+qrRoutes(app, db, ai);
+
 /* Public pages (no login): field survey + open analytics dashboard. */
 app.get('/survey', (req, res) => res.sendFile(path.join(__dirname, 'public', 'survey.html')));
 app.get('/public/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));

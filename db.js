@@ -10,7 +10,15 @@ const DATA_DIR = path.join(__dirname, 'data');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
 let DB = null;
 
-const emptyDb = () => ({ users: [], interviews: [], questions: [], suggestions: [], settings: {}, site: {}, stakeholder_topics: [], survey_responses: [], ai_reports: [], sync_queue: [], question_bank: [], interview_sessions: [], sentiment_cache: [], seq: 1 });
+const emptyDb = () => ({
+  users: [], interviews: [], questions: [], suggestions: [], settings: {}, site: {},
+  stakeholder_topics: [], survey_responses: [], ai_reports: [], sync_queue: [],
+  question_bank: [], interview_sessions: [], sentiment_cache: [], seq: 1,
+  // QR Survey System (STEP 1: offline-first survey + interview system)
+  qr_surveys: [],
+  qr_survey_questions: [],
+  qr_code_settings: { scale: [1, 2, 3, 4, 5], interpretations: { 5: 'Very High', 4: 'High', 3: 'Moderate', 2: 'Low', 1: 'Very Low' } }
+});
 const now = () => new Date().toISOString();
 const dayOf = (iso) => String(iso || '').slice(0, 10);
 const defaultSettings = () => ({ accent: 'blue', theme: 'light', itemsPerPage: 8, defaultQuestionCount: 20, aiModel: 'gpt-4o-mini', notifications: true, compact: false });
@@ -258,6 +266,7 @@ function saveSurveyResponse(item) {
     id: item.clientId || uid('sr'),
     stakeholder: c(item.stakeholder, 120) || 'General',
     topic: c(item.topic, 300) || 'General Survey', topicId: item.topicId || null,
+    surveyId: item.surveyId || null,
     answers: Array.isArray(item.answers) ? item.answers.slice(0, 50).map(a => ({ question: c(a.question, 2000), answer: c(a.answer, 8000) })) : [],
     deviceLabel: c(item.deviceLabel, 200),
     syncedAt: now(), createdAt: item.createdAt || now(), updatedAt: now()
@@ -343,4 +352,184 @@ function stats(userId) {
   };
 }
 
-module.exports = { initDb, persist, now, SCALE_META, findUserByName, findUserByLogin, getUserById, safeUser, createUser, listUsers, updateUser, deleteUser, getSite, saveSite, getSettings, saveSettings, listInterviews, getInterview, withCounts, createInterview, updateInterview, deleteInterview, listQuestions, addQuestions, addQuestion, getQuestion, updateQuestion, deleteQuestion, saveAnswer, bankQuestions, getSuggestion, saveSuggestion, stats, listTopics, getTopic, upsertTopic, deleteTopic, listSurveyResponses, getSurveyResponse, saveSurveyResponse, listReports, getReport, getReportByResponse, saveReport, reportAggregates };
+/* ---------- QR Survey System ---------- */
+function nextSurveyId() {
+  const y = String(new Date().getFullYear());
+  const seq = String(DB.seq).padStart(4, '0');
+  return `QR-${y}-${seq}`;
+}
+
+function createQrSurvey(userId, data) {
+  const stamp = now();
+  const survey = {
+    id: uid('qrs'), userId,
+    surveyId: null,
+    title: String(data.title || '').trim().slice(0, 200),
+    stakeholder: String(data.stakeholder || '').trim().slice(0, 100),
+    language: data.language === 'Tagalog' ? 'Tagalog' : 'English',
+    questionCount: Math.max(1, Math.min(50, parseInt(data.questionCount) || 5)),
+    status: 'draft', questions: data.questions || [],
+    qrCodeUrl: null, respondentCount: 0,
+    createdAt: stamp, updatedAt: stamp
+  };
+  DB.qr_surveys.push(survey); persist(); return survey;
+}
+
+function getQrSurvey(filter) {
+  if (!filter) filter = {};
+  const byId = DB.qr_surveys.find(s => s.id === filter.id || s.surveyId === filter.surveyId || String(filter).startsWith('QR-'));
+  if (byId) return byId;
+  return DB.qr_surveys.find(s => s.surveyId === filter);
+}
+
+function getQrSurveyQuestions(surveyId) {
+  return DB.qr_survey_questions
+    .filter(q => q.surveyId === surveyId)
+    .sort((a, b) => (a.number || 0) - (b.number || 0));
+}
+
+function saveQrSurveyQuestions(surveyId, questions) {
+  DB.qr_survey_questions = DB.qr_survey_questions.filter(q => q.surveyId !== surveyId);
+  questions.forEach((q, i) => {
+    DB.qr_survey_questions.push({
+      id: uid('qrsq'), surveyId, number: i + 1,
+      text: String(q.text || '').trim().slice(0, 2000),
+      stakeholder: String(q.stakeholder || '').trim().slice(0, 100),
+      category: String(q.category || 'General').trim().slice(0, 100),
+      createdAt: now()
+    });
+  });
+  persist();
+}
+
+function confirmQrSurvey(id) {
+  const survey = DB.qr_surveys.find(s => s.id === id || s.surveyId === id);
+  if (!survey) return null;
+  if (survey.status === 'confirmed') return survey;
+  if (survey.questions.length === 0) return null;
+  if (!survey.surveyId) {
+    survey.surveyId = nextSurveyId();
+    survey.status = 'confirmed';
+    survey.updatedAt = now();
+    saveQrSurveyQuestions(survey.surveyId, survey.questions);
+    survey.questions = [];
+    persist();
+  }
+  return survey;
+}
+
+function listQrSurveys(filter) {
+  let list = DB.qr_surveys.slice();
+  if (filter && filter.userId) list = list.filter(s => s.userId === filter.userId);
+  if (filter && filter.status) list = list.filter(s => s.status === filter.status);
+  return list.map(s => {
+    const qCount = DB.qr_survey_questions.filter(q => q.surveyId === (s.surveyId || s.id)).length;
+    return {
+      id: s.id, userId: s.userId, surveyId: s.surveyId, title: s.title,
+      stakeholder: s.stakeholder, language: s.language,
+      questionCount: s.questionCount, status: s.status,
+      questionCountStored: qCount, respondentCount: s.respondentCount || 0,
+      qrCodeUrl: s.qrCodeUrl, createdAt: s.createdAt, updatedAt: s.updatedAt
+    };
+  }).sort((a, b) => (b.updatedAt || b.createdAt || '').localeCompare(a.updatedAt || a.createdAt || ''));
+}
+
+
+function qrSurveyAnalytics(surveyId) {
+  const survey = getQrSurvey(surveyId);
+  if (!survey) return { survey: null, responses: [], analytics: null };
+  const responses = DB.survey_responses.filter(r => r.surveyId === surveyId && r.answers && r.answers.length > 0);
+  const total = responses.length;
+  const freq = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  let sumScores = 0;
+  responses.forEach(r => {
+    if (r.score != null && r.score >= 1 && r.score <= 5) { freq[r.score]++; sumScores += r.score; }
+  });
+  const weightedMean = total > 0 ? +(sumScores / total).toFixed(2) : 0;
+  const meta = DB.qr_code_settings.interpretations || { 5: 'Very High', 4: 'High', 3: 'Moderate', 2: 'Low', 1: 'Very Low' };
+  let interpretation = 'No responses yet';
+  if (total > 0) interpretation = meta[Math.round(weightedMean)] || 'Moderate';
+  const scaleLabels = ['1 - Very Low', '2 - Low', '3 - Moderate', '4 - High', '5 - Very High'];
+  const questions = getQrSurveyQuestions(surveyId);
+  const perQuestion = questions.map(q => {
+    const qResponses = responses.filter(r => r.answers.some(a => a.question === q.text));
+    const qFreq = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    let qSum = 0;
+    qResponses.forEach(r => {
+      if (r.score != null && r.score >= 1 && r.score <= 5) { qFreq[r.score]++; qSum += r.score; }
+    });
+    const qTotal = qResponses.length;
+    const qMean = qTotal > 0 ? +(qSum / qTotal).toFixed(2) : 0;
+    return {
+      questionId: q.id, number: q.number, text: q.text,
+      stakeholder: q.stakeholder, category: q.category,
+      totalResponses: qTotal, frequency: qFreq, weightedMean: qMean,
+      interpretation: qTotal > 0 ? meta[Math.round(qMean)] || 'Moderate' : 'No responses'
+    };
+  });
+  return {
+    survey: { surveyId: survey.surveyId || survey.id, title: survey.title, stakeholder: survey.stakeholder, language: survey.language, questionCount: survey.questionCount, status: survey.status, createdAt: survey.createdAt },
+    responses: responses.map(r => ({ id: r.id, clientId: r.clientId, stakeholder: r.stakeholder, language: r.language, topic: r.topic, answers: r.answers, score: r.score, level: r.level, createdAt: r.createdAt, synced: r.synced !== false, surveyId: r.surveyId })),
+    analytics: { totalResponses: total, frequency: freq, distribution: freq, weightedMean, interpretation, scale: [1, 2, 3, 4, 5], scaleLabels, perQuestion, meta }
+  };
+}
+
+function updateQrSurveyRespondentCount(surveyId) {
+  const survey = DB.qr_surveys.find(s => s.surveyId === surveyId);
+  if (!survey) return false;
+  survey.respondentCount = (survey.respondentCount || 0) + 1;
+  survey.updatedAt = now();
+  persist();
+  return true;
+}
+
+
+function qrSurveyAnalytics(surveyId) {
+  const survey = getQrSurvey(surveyId);
+  if (!survey) return { survey: null, responses: [], analytics: null };
+  const responses = DB.survey_responses.filter(r => r.surveyId === surveyId && r.answers && r.answers.length > 0);
+  const total = responses.length;
+  const freq = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  let sumScores = 0;
+  responses.forEach(r => {
+    if (r.score != null && r.score >= 1 && r.score <= 5) { freq[r.score]++; sumScores += r.score; }
+  });
+  const weightedMean = total > 0 ? +(sumScores / total).toFixed(2) : 0;
+  const meta = DB.qr_code_settings.interpretations || { 5: 'Very High', 4: 'High', 3: 'Moderate', 2: 'Low', 1: 'Very Low' };
+  let interpretation = 'No responses yet';
+  if (total > 0) interpretation = meta[Math.round(weightedMean)] || 'Moderate';
+  const scaleLabels = ['1 - Very Low', '2 - Low', '3 - Moderate', '4 - High', '5 - Very High'];
+  const questions = getQrSurveyQuestions(surveyId);
+  const perQuestion = questions.map(q => {
+    const qResponses = responses.filter(r => r.answers.some(a => a.question === q.text));
+    const qFreq = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    let qSum = 0;
+    qResponses.forEach(r => {
+      if (r.score != null && r.score >= 1 && r.score <= 5) { qFreq[r.score]++; qSum += r.score; }
+    });
+    const qTotal = qResponses.length;
+    const qMean = qTotal > 0 ? +(qSum / qTotal).toFixed(2) : 0;
+    return {
+      questionId: q.id, number: q.number, text: q.text,
+      stakeholder: q.stakeholder, category: q.category,
+      totalResponses: qTotal, frequency: qFreq, weightedMean: qMean,
+      interpretation: qTotal > 0 ? meta[Math.round(qMean)] || 'Moderate' : 'No responses'
+    };
+  });
+  return {
+    survey: { surveyId: survey.surveyId || survey.id, title: survey.title, stakeholder: survey.stakeholder, language: survey.language, questionCount: survey.questionCount, status: survey.status, createdAt: survey.createdAt },
+    responses: responses.map(r => ({ id: r.id, clientId: r.clientId, stakeholder: r.stakeholder, language: r.language, topic: r.topic, answers: r.answers, score: r.score, level: r.level, createdAt: r.createdAt, synced: r.synced !== false, surveyId: r.surveyId })),
+    analytics: { totalResponses: total, frequency: freq, distribution: freq, weightedMean, interpretation, scale: [1, 2, 3, 4, 5], scaleLabels, perQuestion, meta }
+  };
+}
+
+function updateQrSurveyRespondentCount(surveyId) {
+  const survey = DB.qr_surveys.find(s => s.surveyId === surveyId);
+  if (!survey) return false;
+  survey.respondentCount = (survey.respondentCount || 0) + 1;
+  survey.updatedAt = now();
+  persist();
+  return true;
+}
+
+module.exports = { initDb, persist, now, SCALE_META, findUserByName, findUserByLogin, getUserById, safeUser, createUser, listUsers, updateUser, deleteUser, getSite, saveSite, getSettings, saveSettings, listInterviews, getInterview, withCounts, createInterview, updateInterview, deleteInterview, listQuestions, addQuestions, addQuestion, getQuestion, updateQuestion, deleteQuestion, saveAnswer, bankQuestions, getSuggestion, saveSuggestion, stats, listTopics, getTopic, upsertTopic, deleteTopic, listSurveyResponses, getSurveyResponse, saveSurveyResponse, listReports, getReport, getReportByResponse, saveReport, reportAggregates, nextSurveyId, createQrSurvey, getQrSurvey, getQrSurveyQuestions, saveQrSurveyQuestions, confirmQrSurvey, listQrSurveys, qrSurveyAnalytics, updateQrSurveyRespondentCount };
